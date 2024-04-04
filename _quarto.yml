@@ -1,0 +1,8 @@
+project:
+  title: "."
+  render: 
+    - "index.qmd"
+  output-dir: "report"
+
+execute:
+  cache: true

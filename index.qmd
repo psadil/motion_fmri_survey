@@ -1,0 +1,503 @@
+---
+title: "[Draft] Survey of Motion"
+date: 2024-02-09
+date-format: short
+format: 
+  html:
+    page-layout: full
+    embed-resources: true
+    standalone: true
+execute: 
+  echo: false
+  warning: false
+
+---
+
+```{r setup}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(ggdist)
+library(patchwork)
+
+targets::tar_load(c(ukb_reg, hcp, ukb_design, hcp_design, ukb_responses))
+
+add_fd <- function(.data, ..., radius = 50){
+  .data |>
+    group_by( ... ) |>
+    arrange(t, .by_group = TRUE) |>
+    mutate(
+      across(matches("[trans|rot]_[xyz]"), \(x) abs(lag(x) - x))) |>
+    ungroup() |>
+    na.omit() |>
+    dplyr::mutate(
+      dplyr::across(tidyselect::starts_with("rot"), \(x) x * radius),
+      fd = rot_x + rot_y + rot_z + trans_x + trans_y + trans_z
+    )
+}
+fd_max_y <- 0.4
+
+
+```
+
+## HCP
+
+::: {#fig-hcp-fd}
+
+
+
+```{r fig-hcp-fd}
+#| fig-width: 12
+#| fig-height: 8
+hcp_tmp <- hcp |>
+  select(-ends_with("derivative1")) |>
+  add_fd(sub, task, ped) |>
+  summarise(
+    mad = sd(fd) / sqrt(n()),
+    median = mean(fd),
+    .by = c(t, task, ped, ses)
+  ) |>
+  mutate(ses = glue::glue("Ses {ses}")) 
+
+plot_hcp_fd <- function(hcp_tmp, hcp_design, task){
+  hcp_tmp |>
+    filter(stringr::str_detect(task, .env$task)) |>
+    ggplot(aes(x=t, y=median, color=ped)) +
+    facet_grid(ped~task, scales = "free_x") +
+    geom_rect(
+      data=filter(hcp_design, stringr::str_detect(task, .env$task)),
+      aes(
+        xmin=onset, 
+        xmax = onset+duration, 
+        ymin = Inf,
+        ymax = -Inf,
+        fill=type),
+      alpha = 0.5,
+      inherit.aes = FALSE) +
+    geom_line() +
+    geom_ribbon(
+      aes(ymin=median-2*mad,ymax=median+2*mad),
+      alpha = 0.2) +
+    ylab("Framewise Displacement") +
+    xlab("Volume") +
+    scale_fill_viridis_d(option = "turbo") +
+    theme(legend.position = "bottom") +
+    guides(color=FALSE) +
+    coord_cartesian(ylim = c(0, fd_max_y))
+}
+
+a <- plot_hcp_fd(hcp_tmp, hcp_design, "WM") + ggtitle("Ses 1")
+b <- plot_hcp_fd(hcp_tmp, hcp_design, "GAMBLING")
+c <- plot_hcp_fd(hcp_tmp, hcp_design, "MOTOR")
+d1 <- a + b + c + plot_layout(nrow = 1)
+
+d <- plot_hcp_fd(hcp_tmp, hcp_design, "LANGUAGE") + ggtitle("Ses 2")
+e <- plot_hcp_fd(hcp_tmp, hcp_design, "SOCIAL")
+f <- plot_hcp_fd(hcp_tmp, hcp_design, "RELATIONAL")
+g <- plot_hcp_fd(hcp_tmp, hcp_design, "EMOTION")
+d2 <- d + e + f + g + plot_layout(nrow = 1)
+
+  # design = c(
+  #   area(1,1,1,2),
+  #   area(1,2,1,3),
+  #   area(1,3,1,4),
+  #   area(2,1,2,2),
+  #   area(2,2,2,3),
+  #   area(2,3,2,4),
+  #   area(2,4,2,5)),
+
+a + b + c + d + e + f + g + plot_layout(
+  design = "
+  123#
+  4567
+  ") &
+  theme(legend.position = "bottom")
+# a <- hcp_tmp |>
+#   filter(stringr::str_detect(ses, "1")) |>
+#   ggplot(aes(x=t, y=median, color=ped)) +
+#   facet_wrap(~task, nrow = 1, scales = "free_x") +
+#   geom_line() +
+#   geom_ribbon(
+#     aes(ymin=median-2*mad,ymax=median+2*mad),
+#     alpha = 0.2) +
+#   ylab("Framewise Displacement") +
+#   xlab("Volume") +
+#   theme(legend.position = "bottom") +
+#   coord_cartesian(ylim = c(0, fd_max_y)) +
+#   ggtitle("HCP Ses 1")
+# 
+# b <- hcp_tmp |>
+#   filter(stringr::str_detect(ses, "2")) |>
+#   ggplot(aes(x=t, y=median, color=ped)) +
+#   facet_wrap(~task, nrow = 1, scales = "free_x") +
+#   geom_line() +
+#   geom_ribbon(
+#     aes(ymin=median-2*mad,ymax=median+2*mad),
+#     alpha = 0.2) +
+#   ylab("Framewise Displacement") +
+#   xlab("Volume") +
+#   theme(legend.position = "bottom") +
+#   coord_cartesian(ylim = c(0, fd_max_y)) +
+#   ggtitle("HCP Ses 2")
+# 
+# a + b + plot_layout(nrow = 2, guides = "collect") & theme(legend.position = "right")
+```
+
+Motion in HCP Lines trace the mean across participants and the ribbons span 2 standard errors. Framewise displacement is measured in mm. Shaded regions mark the average onset and duration of task blocks (average across participants). In tasks where order and timing of blocks were consistent, the regions are distinguished by block type (e.g., see MOTOR). The blocks in the LANGUAGE task were relatively variable across participants (in both timing and number), and so the corresponding shaded regions for that panel overlap. 
+
+:::
+
+
+```{r}
+#| label: fig-hcp-params
+#| fig-cap: "Motion in HCP. Lines trace the mean across participants and the ribbons span 2 standard errors. Translation parameters are in mm. Rotation parameters are in radians."
+#| fig-width: 12
+#| fig-height: 8
+
+hcp |>
+  select(-ends_with("derivative1")) |>
+  summarise(
+    across(
+      matches("[rot|trans]_[xyz]$"), 
+      \(x) sd(x) / sqrt(length(x)),
+      .names = "{.col}.sem"),
+    across(
+      c(matches("[rot|trans]_[xyz]$")), 
+      mean,
+      .names = "{.col}.mean"),
+    .by = c(t, task, ped, ses)
+  ) |>
+  pivot_longer(
+    matches("[trans|rot]_[xyz]"), 
+    names_to = c("parameter", ".stat"),
+    names_sep = "\\.") |>
+  pivot_wider(names_from = .stat) |>
+  mutate(ses = glue::glue("Ses {ses}")) |>
+  ggplot(aes(x=t, y=mean, color=ped)) +
+  ggh4x::facet_nested(parameter~ses + task, scales = "free") +
+  geom_line() +
+  geom_ribbon(
+    aes(ymin=mean-2*sem, ymax=mean+2*sem),
+    alpha = 0.1) +
+  ylab("Motion") +
+  xlab("Volume") 
+
+```
+
+
+```{r}
+#| label: fig-hcp-all
+#| fig-cap: "Motion in MOTOR HCP, Trans Y and Rot Z. Each line traces one scan. Axes clipped for visualization. Motion timecourses have been mean-centered."
+#| fig-height: 8
+#| fig-width: 10
+
+hcp_tmp <- hcp |> 
+  filter(task=="MOTOR") |>
+  select(-ends_with("derivative1")) |>
+  select(t, trans_z, rot_z, ped, sub, ses, task) |>
+  pivot_longer(
+    matches("[trans|rot]_[xyz]"), 
+    names_to = "parameter") |>
+  mutate(
+    value = scale(value, scale = FALSE),
+    .by = c(sub, task, ses, parameter)
+  ) 
+
+a <- hcp_tmp |>
+  filter(stringr::str_detect(parameter, "rot_z")) |>
+  ggplot(aes(x=t, y=value, group=sub)) +
+  geom_rect(
+    data=filter(hcp_design, stringr::str_detect(task, "MOTOR")),
+    aes(
+      xmin=onset, 
+      xmax = onset+duration, 
+      ymin = Inf,
+      ymax = -Inf,
+      fill=type),
+    alpha = 0.25,
+    inherit.aes = FALSE) +
+  scale_fill_viridis_d(option = "turbo") +
+  facet_wrap(~ped) +
+  geom_line(alpha=0.1) +
+  ylab("Rot Z (radian)") +
+  coord_cartesian(ylim = c(-0.01, 0.01)) +
+  xlab("Volume")
+
+b <- hcp_tmp |>
+  filter(stringr::str_detect(parameter, "trans_z")) |>
+  ggplot(aes(x=t, y=value, group=sub)) +
+  geom_rect(
+    data=filter(hcp_design, stringr::str_detect(task, "MOTOR")),
+    aes(
+      xmin=onset, 
+      xmax = onset+duration, 
+      ymin = Inf,
+      ymax = -Inf,
+      fill=type),
+    alpha = 0.25,
+    inherit.aes = FALSE) +
+  scale_fill_viridis_d(option = "turbo") +
+  facet_wrap(~ped) +
+  geom_line(alpha=0.1) +
+  ylab("Trans Z (mm)") +
+  coord_cartesian(ylim = c(-0.75, 0.75)) +
+  xlab("Volume")
+
+a + b + plot_layout(nrow = 2) & ggtitle("MOTOR")
+```
+
+
+## UKB
+
+
+```{r fig-ukb-all}
+#| fig-cap: "Motion in UKB. Lines trace the mean across participants and the ribbons span 2 standard errors. Translation parameters are in mm. Rotation parameters are in radians."
+#| fig-width: 10
+#| eval: false
+
+ukb_reg |>
+  pivot_longer(
+    matches("[trans|rot]_[xyz]"), 
+    names_to = "parameter") |>
+  ggplot() +
+  geom_rect(
+    data=ukb_design,
+    aes(
+      xmin=onset, 
+      xmax = onset+duration, 
+      fill=Block),
+    ymax = Inf,
+    ymin = -Inf,
+    alpha = 0.2) +
+  facet_wrap(~parameter, scales = "free_y") +
+  geom_line(aes(x=t, y=value), alpha = 0.01) +
+  ylab("Motion") +
+  xlab("Volume")
+
+```
+
+:::{#fig-ukb-fd}
+
+```{r fig-ukb-fd}
+
+ukb_reg |>
+  add_fd(sub, ses) |>
+  summarise(
+    mad = sd(fd) / sqrt(n()),
+    median = mean(fd),
+    .by = t
+  ) |>
+  ggplot() +
+  geom_vline(aes(xintercept=onset), data=ukb_responses, alpha=0.5) + 
+  geom_rect(
+    data=ukb_design,
+    aes(
+      xmin=onset, 
+      xmax = onset+duration, 
+      fill=Block),
+    ymax = Inf,
+    ymin = -Inf,
+    alpha = 0.2) +
+  geom_line(aes(x=t, y=median)) +
+  geom_ribbon(
+    aes(x = t, ymin=median-2*mad,ymax=median+2*mad),
+    alpha = 0.2) +
+  ylab("Framewise Displacement") +
+  coord_cartesian(ylim = c(0, fd_max_y)) +
+  xlab("Volume")
+
+```
+
+Framewise Displacement in UKB. Lines trace the mean across participants and the ribbons span 2 standard errors. Translation parameters are in mm. Rotation parameters are in radians.
+
+:::
+
+:::{#fig-ukb-params}
+
+```{r fig-ukb-params}
+#| fig-width: 10
+
+ukb_reg |>
+  summarise(
+    across(
+      matches("[trans|rot]_[xyz]$"), 
+      \(x) sd(x) /sqrt(length(x)),
+      .names = "{.col}.mad"),
+    across(
+      c(matches("[trans|rot]_[xyz]$")), 
+      mean,
+      .names = "{.col}.median"),
+    .by = t
+  ) |>
+  pivot_longer(
+    matches("[trans|rot]_[xyz]"), 
+    names_to = c("parameter", ".stat"),
+    names_sep = "\\.") |>
+  pivot_wider(names_from = .stat) |>
+  ggplot() +
+  geom_vline(aes(xintercept=onset), data=ukb_responses, alpha=0.5) + 
+  geom_rect(
+    data=ukb_design,
+    aes(
+      xmin=onset, 
+      xmax = onset+duration, 
+      fill=Block),
+    ymax = Inf,
+    ymin = -Inf,
+    alpha = 0.2) +
+  facet_wrap(~parameter, scales = "free_y") +
+  geom_line(aes(x=t, y=median)) +
+  geom_ribbon(
+    aes(x=t,ymin=median-2*mad,ymax=median+2*mad),
+    alpha = 0.2) +
+  ylab("Motion")
+
+```
+
+Motion in UKB. Lines trace the mean across participants and the ribbons span 2 standard errors. Translation parameters are in mm. Rotation parameters are in radians.
+
+:::
+
+```{r}
+#| eval: false
+ukb_reg |>
+  reframe(
+    across(
+      c(starts_with("trans"), starts_with("rot")), 
+      \(x) quantile(x, probs = 0.25),
+      .names = "lower_{.col}"
+    ),
+    across(
+      c(starts_with("trans"), starts_with("rot")), 
+      \(x) quantile(x, probs = 0.5),
+      .names = "med_{.col}"
+    ),
+    across(
+      c(starts_with("trans"), starts_with("rot")), 
+      \(x) quantile(x, probs = 0.75),
+      .names = "upper_{.col}"
+    ),
+    .by = t
+  ) |>
+  pivot_longer(
+    c(starts_with("lower"), starts_with("upper"), starts_with("med")),
+    names_to = c(".stat", "parameter"),
+    names_pattern = "(lower|upper|med)_([[:print:]]+)") |>
+  pivot_wider(names_from = .stat) |>
+  ggplot(aes(x=t)) +
+  facet_wrap(~parameter, scales = "free_y") +
+  geom_line(aes(y=med)) +
+  geom_ribbon(aes(ymin=lower, ymax = upper), alpha=.2)
+```
+
+
+```{r}
+#| fig-cap: "Translation in Y Direction. Each row corresponds to 1 participant. Volumes were excluded if they had absolution motion above the 99th quintile."
+#| eval: false
+ukb_reg |> 
+  filter(
+    between(
+      abs(trans_y), 
+      0, 
+      quantile(abs(trans_y), 0.99))
+  ) |>
+  mutate(sub = factor(sub)) |>
+  pivot_longer(
+    c(starts_with("trans"), starts_with("rot")), 
+    names_to = "parameter") |>
+  filter(parameter == "trans_y") |>
+  ggplot(aes(x=t, fill=value, y=sub)) +
+  facet_wrap(~parameter, scales = "free", drop = TRUE) +
+  geom_raster() +
+  scale_fill_distiller(
+    type = "seq",
+    direction = -1,
+    palette = "Greys") +
+  theme_void()
+```
+
+
+```{r}
+#| fig-cap: "Translation in Z Direction. Each row corresponds to 1 participant. Volumes were excluded if they had absolution motion above the 99th quintile."
+#| eval: false
+ukb_reg |> 
+  filter(
+    between(
+      abs(trans_z), 
+      0, 
+      quantile(abs(trans_z), 0.99))
+  ) |>
+  mutate(sub = factor(sub)) |>
+  pivot_longer(
+    c(starts_with("trans"), starts_with("rot")), 
+    names_to = "parameter") |>
+  filter(parameter == "trans_z") |>
+  ggplot(aes(x=t, fill=value, y=sub)) +
+  facet_wrap(~parameter, scales = "free", drop = TRUE) +
+  geom_raster() +
+  scale_fill_distiller(
+    type = "seq",
+    direction = -1,
+    palette = "Greys") +
+  theme_void()
+```
+
+
+
+
+## MRIQC
+
+```{r mriqc}
+targets::tar_load(mriqc_bold)
+```
+
+
+From MRIQC, `r nrow(mriqc_bold)` samples are available 
+
+```{r}
+#| label: fig-mriqc-fd-mean
+#| fig-cap: "FD Mean in MRIQC. Dots mark percentiles."
+mriqc_bold |> 
+  filter(between(fd_mean, 0, quantile(fd_mean, 0.99))) |>
+  ggplot(aes(x=fd_mean)) +
+  stat_slab(aes(thickness = after_stat(pdf*n)), scale = 0.7) +
+  stat_dotsinterval(
+    side = "bottom", 
+    scale = 0.7, 
+    slab_linewidth = NA,
+    quantiles = 100) +
+  xlab("Framewise Displacement Mean (mm)") +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+```
+
+
+
+```{r}
+#| label: fig-mriqc-fd-mean-RT
+#| fig-cap: "FD Mean in MRIQC by RepetitionTime. Figure limited to cases with TR under 3 seconds. Dots mark percentiles."
+mriqc_bold |> 
+  filter(between(fd_mean, 0, quantile(fd_mean, 0.99))) |>
+  filter(RepetitionTime <= 3, !is.na(RepetitionTime)) |>
+  mutate(
+    RepetitionTime = cut(
+      RepetitionTime, 
+      breaks = c(0, 1, 2, 3),
+    ),
+    RepetitionTime = forcats::fct_na_level_to_value(RepetitionTime)) |>
+  select(RepetitionTime, fd_mean) |>
+  na.omit() |>
+  ggplot(aes(y=RepetitionTime, x = fd_mean)) +
+  stat_slab(aes(thickness = after_stat(pdf*n)), scale = 0.7) +
+  stat_dotsinterval(
+    side = "bottom", 
+    scale = 0.7, 
+    slab_linewidth = NA,
+    quantiles = 100) +
+  ylab("Repetition Time (grouped, seconds)") +
+  xlab("Framewise Displacement Mean (mm)")
+```
+
