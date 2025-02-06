@@ -1,0 +1,76 @@
+#!/bin/bash
+#SBATCH --job-name=motion
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+#SBATCH --time=12:00:00
+#SBATCH --output log
+
+# Gather motion files
+
+## HCP
+find \
+  /dcs07/smart/data/human-connectome-project-openaccess/HCP1200 \
+  -mindepth 5 \
+  -maxdepth 5 \
+  -name "*Movement*txt" \
+  -xtype f \
+  -exec cp \
+  -uLv --parents {} ./ \;
+
+find \
+  /dcs07/smart/data/HCPDevelopmentRec/sourcedata/fmriresults01 \
+  -mindepth 5 \
+  -maxdepth 5 \
+  -name "*Movement*txt" \
+  -type f \
+  -exec cp -uv --parents {} ./ \;
+
+find \
+  /dcs07/smart/data/HCPAgingRec/sourcedata/fmriresults01 \
+  -mindepth 5 \
+  -maxdepth 5 \
+  -name "*Movement*txt" \
+  -type f \
+  -exec cp -uv --parents {} ./ \;
+
+## ABCD
+find \
+  /dcs07/smart/data/abcd/rawdata \
+  -mindepth 4 \
+  -maxdepth 4 \
+  -name "*motion.tsv" \
+  -type f \
+  -exec cp -uv --parents {} ./ \;
+
+
+## UKB
+find /dcs07/smart/data/ukb/rawdata/ -maxdepth 1 -type d -name "sub*" > ukb_srcs
+n_ukb=$(wc -l ukb_srcs | cut -f 1 -d " ")
+
+for i in $(seq 1 "${n_ukb}" ); do
+    sub=$(sed "${i}q;d" ukb_srcs)
+    echo "${i}"
+    echo "${sub}"
+    for ses in "${sub}"/ses*; do
+        mcf_task=${ses}/non-bids/20249/fMRI/tfMRI.feat/mc/prefiltered_func_data_mcf.par
+        if [[ -e $mcf_task ]]; then
+            echo "${mcf_task}" >> ukb_motion_files
+        fi
+        rms_task=${ses}/non-bids/20249/fMRI/tfMRI.feat/mc/prefiltered_func_data_mcf_rel.rms
+        if [[ -e $rms_task ]]; then
+            echo "${rms_task}" >> ukb_motion_files
+        fi
+        mcf_rest=${ses}/non-bids/20227/fMRI/rfMRI.ica/mc/prefiltered_func_data_mcf.par
+        if [[ -e $mcf_rest ]]; then
+            echo "${mcf_rest}" >> ukb_motion_files
+        fi
+        rms_rest=${ses}/non-bids/20227/fMRI/rfMRI.ica/mc/prefiltered_func_data_mcf_rel.rms
+        if [[ -e $rms_rest ]]; then
+            echo "${rms_rest}" >> ukb_motion_files
+        fi
+    done
+done 
+
+cat ukb_motion_files | xargs -I % cp --parents -vL /dcs07/smart/data/ukb/rawdata/% ./
