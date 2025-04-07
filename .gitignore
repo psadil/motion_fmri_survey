@@ -2,8 +2,9 @@
 .Rhistory
 .RData
 .Ruserdata
-data
+data/*
 !data/motion
 /.quarto/
 index*
 Untitled*
+*nii

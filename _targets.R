@@ -1,32 +1,264 @@
-
 library(targets)
+library(crew)
+
 source("R/hcp.R")
 source("R/ukb.R")
+source("R/abcd.R")
 source("R/mriqc.R")
+source("R/spacetop.R")
 source("R/utils.R")
+source("R/spectrum.R")
+source("R/qc.R")
+
+targets::tar_option_set(
+  trust_timestamps = TRUE,
+  format = "parquet",
+  controller = crew_controller_local(workers = 7),
+  storage = "worker"
+)
 
 
 list(
-  tar_target(
-    ukb_sources, 
-    fs::dir_ls("data/ukb", recurse = TRUE, glob="*par"), 
-    format = "file_fast"),
-  tar_target(ukb, get_ukb(ukb_sources), format = "parquet"),
+  tar_target(ukb_source, "data/motion/derivatives/ukb.parquet", format = "file"),
+  tar_target(ukb_exclusion, get_ukb_exclusion()),
+  tar_target(ukb, get_ukb(ukb_source, ukb_exclusion)),
+  tar_target(ukb_source2, "data/motion/derivatives2/ukb.parquet", format = "file"),
+  tar_target(ukb2, get_ukb(ukb_source2, ukb_exclusion)),
+  tar_target(spacetop_source, "data/motion/derivatives/spacetop.parquet", format = "file"),
+  tar_target(spacetop_exclusion, get_spacetop_exclusion()),
+  tar_target(spacetop, get_spacetop(spacetop_source, spacetop_exclusion)),
   tar_target(ukb_beh, "data/ukb677207_bulk.parquet", format = "file"),
-  tar_target(include_ukb, get_include_ukb(ukb_beh), format = "parquet"),
-  tar_target(ukb_reg, get_ukb_reg(ukb, include_ukb), format = "parquet"),
+  tar_target(include_ukb, get_include_ukb(ukb_beh)),
+  tar_target(ukb_reg, get_ukb_reg(ukb, include_ukb)),
   tar_target(ukb_design_mat, "data/ukb/design.mat", format = "file"),
-  tar_target(ukb_design, get_ukb_design(ukb_design_mat), format = "parquet"),
+  tar_target(ukb_events, get_ukb_design(ukb_design_mat)),
   tar_target(ukb_eprime, "data/1000513_25748_2_0.txt", format = "file"),
-  tar_target(ukb_responses, get_ukb_responses(ukb_eprime), format = "parquet"),
+  tar_target(ukb_responses, get_ukb_responses(ukb_eprime)),
   tar_target(
-    hcp_sources, 
-    fs::dir_ls("data/hcp", recurse = TRUE, glob="*txt"), 
-    format = "file_fast"),
+    hcpya_source,
+    "data/motion/derivatives/human-connectome-project-openaccess.parquet",
+    format = "file"
+  ),
+  tar_target(hcpya_exclusion, get_hcpya_exclusion(hcpya_source)),
+  tar_target(hcpya, get_hcp(hcpya_source, hcpya_exclusion)),
+  tar_target(hcpya_events, get_hcpya_events("data/hcp_evs")),
+  tar_target(
+    hcpa_source,
+    "data/motion/derivatives/HCPAgingRec.parquet",
+    format = "file"
+  ),
+  tar_target(hcpa, get_hcp(hcpa_source)),
+  tar_target(
+    hcpd_source,
+    "data/motion/derivatives/HCPDevelopmentRec.parquet",
+    format = "file"
+  ),
+  tar_target(hcpd_exclusion, get_hcpd_exclusion()),
+  tar_target(hcpd, get_hcp(hcpd_source, hcpd_exclusion)),
+  tar_target(abcd_source, "data/motion/derivatives/abcd.parquet", format = "file"),
+  tar_target(abcd_exclusion, get_abcd_exclusion(abcd_source, abcd_demographics)),
+  tar_target(abcd_events, get_abcd_events()),
+  tar_target(abcd, get_abcd(abcd_source, abcd_exclusion)),
+  tarchetypes::tar_group_by(
+    datasets,
+    bind_datasets(
+      list(
+        hcpya=hcpya, 
+        hcpa=hcpa, 
+        hcpd=hcpd, 
+        ukb=ukb, 
+        abcd=abcd, 
+        spacetop=spacetop
+      )
+    ),
+    dataset,
+    deployment="main"
+  ),
+  tar_target(
+    by_time, 
+    summarise_by_time(datasets), 
+    pattern=map(datasets),
+    deployment = "main"
+  ),
+  tar_target(
+    by_run, 
+    summarise_by(datasets, .cols=c(dataset, task, scan, ses, sub, filtered)), 
+    pattern=map(datasets),
+    deployment = "main"
+  ),
+  tar_target(ukb_demographics, get_ukb_demographics()),
+  tar_target(hcpya_demographics, get_hcpya_demographics()),
+  tar_target(spacetop_demographics, get_spacetop_demographics()),
+  tar_target(hcpdev_demographics, get_hcp_dev_demographics()),
+  tar_target(hcpaging_demographics, get_hcp_aging_demographics()),
+  tar_target(abcd_demographics, get_abcd_demographics(abcd_source)),
+  tar_target(
+    demographics,
+    get_demographics(
+      ukb = ukb_demographics,
+      hcpya = hcpya_demographics,
+      spacetop = spacetop_demographics,
+      hcpdev = hcpdev_demographics,
+      hcpaging = hcpaging_demographics,
+      abcd = abcd_demographics
+    ),
+    format = "parquet"
+  ),
+  tar_target(
+    demographics_tsv, 
+    write_demographics(demographics, "data/demographics/demographics.tsv"), 
+    format = "file"
+  ),
+  tar_target(
+    hcp_sources,
+    fs::dir_ls("data/hcp", recurse = TRUE, glob = "*txt"),
+    format = "file"
+  ),
   tar_target(hcp_beh, "data/hcp_beh_2_8_2024_15_20_20.csv", format = "file"),
-  tar_target(exclude_hcp, get_exclude_hcp(hcp_beh), format = "parquet"),
-  tar_target(hcp, get_hcp(hcp_sources, exclude_hcp), format = "parquet"),
-  tar_target(hcp_design0, get_hcp_design0("data/hcp_evs"), format = "parquet"),
-  tar_target(hcp_design, get_hcp_design(hcp_design0), format = "parquet"),
-  tar_target(mriqc_bold, get_mriqc_bold(), format = "parquet")
+  tar_target(hcp, get_hcp(hcp_sources, exclude_hcp)),
+  tar_target(mriqc_bold, get_mriqc_bold()),
+  tar_target(
+    lost_strict,
+    get_lost_strict(datasets, by_run = by_run),
+    pattern = map(datasets)
+  ),
+  tar_target(lost_lenient, get_lost_lenient(by_run = by_run)),
+  tar_target(lost, bind_lost(strict=lost_strict, lenient=lost_lenient)),
+  tar_target(
+    hcpa_spectrum, 
+    get_hcpa_spectrum(
+      src="/Users/psadil/data/motion/derivatives/hcpa_spectrum.parquet",
+      by_run=by_run
+    )
+  ),
+  tar_target(
+    hcpd_spectrum, 
+    get_hcpd_spectrum(
+      src="/Users/psadil/data/motion/derivatives/hcpd_spectrum.parquet",
+      by_run=by_run,
+      hcpd_exclusion
+    )
+  ),
+  tar_target(
+    hcpya_spectrum, 
+    get_hcpya_spectrum(
+      src="/Users/psadil/data/motion/derivatives/hcpya_spectrum.parquet",
+      by_run=by_run,
+      excluded=hcpya_exclusion
+    )
+  ),
+  tar_target(
+    abcd_spectrum, 
+    get_abcd_spectrum(
+      src="/Users/psadil/data/motion/derivatives/abcd_spectrum.parquet",
+      by_run=by_run,
+      excluded=abcd_exclusion
+    )
+  ),
+  tar_target(
+    spacetop_spectrum, 
+    get_spacetop_spectrum(
+      src="/Users/psadil/data/motion/derivatives/spacetop_spectrum.parquet",
+      by_run=by_run,
+      excluded=spacetop_exclusion
+    )
+  ),
+  tar_target(
+    datasets2,
+    dplyr::ungroup(bind_datasets(list(ukb=ukb2))),
+  ),
+  tar_target(
+    by_run2, 
+    summarise_by(datasets2, .cols=c(dataset, task, scan, ses, sub, filtered)), 
+    pattern = map(datasets2)),
+  tar_target(
+    lost_strict2,
+    get_lost_strict(datasets2, by_run = by_run2),
+    pattern = map(datasets2)
+  ),
+  tar_target(lost_lenient2, get_lost_lenient(by_run = by_run2)),
+  tar_target(lost2, bind_lost(strict=lost_strict2, lenient=lost_lenient2)),
+  tar_target(qc_src, get_qc_src(by_run), deployment = "main"),
+  tar_target(window_width, 50, format = "qs"),
+  tarchetypes::tar_group_by(
+    ukb_qc, 
+    get_ukb_qc(ukb), 
+    filtered,
+    deployment = "main"
+  ),
+  tar_target(qc_iter, seq_len(250), format = "qs"),
+  tar_target(
+    qc_fd_straight,
+    get_qc_fd(qc_src, ukb_qc, shuffle=FALSE), 
+    pattern=cross(head(qc_src, n=150), ukb_qc),
+    deployment = "main"
+  ),
+  tar_target(
+    qc_fd_shuffled, 
+    get_qc_fd(qc_src, ukb_qc, iter=qc_iter, shuffle=TRUE), 
+    pattern=cross(head(qc_src, n=150), ukb_qc, head(qc_iter, n=50)),
+    deployment = "main"
+  ),
+  tar_target(
+    qcs_straight,
+    get_cor_by_thresh(qc_fd_straight, window_width=window_width),
+    pattern = map(qc_fd_straight)
+  ),
+  tar_target(
+    qcs_shuffled, 
+    get_cor_by_thresh(qc_fd_shuffled, window_width=window_width),
+    pattern = map(qc_fd_shuffled)
+  ),
+  tar_target(
+    qcs_gold, 
+    get_qcs_gold(qcs_straight), 
+    pattern=map(qcs_straight),
+    deployment = "main"),
+  tar_target(qcs_gold2, qcs_gold),
+  tar_target(
+    qcs_surrogate3, 
+    get_cor_by_thresh3(qcs_shuffled, gold=qcs_gold2),
+    pattern = map(qcs_shuffled)
+  ),
+  tar_target(
+    qcs_orig3, 
+    get_cor_by_thresh3(qcs_straight, gold=qcs_gold2),
+    pattern = map(qcs_straight),
+    deployment = "main"
+  ),
+  tar_target(qcs3, dplyr::bind_rows(qcs_orig3, qcs_surrogate3)),
+  
+  tar_target(
+    qc_fd_hcpya, 
+    get_qc_fd_hcpya(hcpya=hcpya, by_run=by_run, n_iter=100, n_sub=50), 
+    deployment = "main"
+  ),
+  tarchetypes::tar_group_by(
+    qc_fd_hcpya_sub, 
+    dplyr::filter(qc_fd_hcpya, iter==0), 
+    sub,
+    deployment = "main"
+  ),
+  tarchetypes::tar_group_by(
+    qc_fd_hcpya_iter, 
+    dplyr::group_nest(qc_fd_hcpya, iter, sub, filtered),
+    iter, sub, filtered,
+    deployment = "main"
+  ),
+  tar_target(cleaned, c(TRUE, FALSE), format="qs", deployment = "main"),
+  tar_target(
+    qcs_cor_hcpya_gold,
+    get_cor_by_thresh_hcpya_gold(qc_fd_hcpya_sub, cleaned=cleaned),
+    pattern = cross(map(qc_fd_hcpya_sub), cleaned)
+  )
+  # tar_target(
+  #   qcs_cor0,
+  #   get_cor_by_thresh_hcpya(
+  #     tidyr::unnest(qc_fd_hcpya_iter, data),
+  #     gold=qcs_cor_hcpya_gold,
+  #     cleaned=cleaned, 
+  #     window_width=window_width
+  #   ),
+  #   pattern = cross(map(qc_fd_hcpya_iter), cleaned)
+  # )
 )
