@@ -1,285 +1,234 @@
 ---
 title: "demographics"
 format: html
-execute: 
-  warning: false
-  cache: true
 ---
 
-```{r setup}
+```{r}
 library(dplyr)
 library(ggplot2)
-library(tidyr)
+```
+
+```{r}
+load_ukb_vols <- function(dataset) {
+  arrow::open_dataset(dataset) |>
+    dplyr::rename_with(~stringr::str_c("f.", .x) |> stringr::str_replace("-", ".")) |>
+    dplyr::filter(!is.na("25733-2.0")) |> # get "usable" scans; https://www.jiscmail.ac.uk/cgi-bin/wa-jisc.exe?A2=ind1807&L=UKB-NEUROIMAGING&D=0&P=1613
+    dplyr::select(
+      f.eid, 
+      sex = f.31.0.0,
+      age = f.21003.2.0,
+      t1_motion=f.24419.2.0,
+      acq_day = f.53.2.0,
+      head_size = f.25000.2.0,
+      icv = f.26521.2.0,
+      site=f.54.2.0,
+      tidyselect::matches("(25011|25012|25013|25014|25015|25016|25017|25018|25019|25020|25021|25022|25023|25024)\\.2"),
+      tidyselect::matches("(26558|26589)\\.2"), # ASEG thalamus-proper
+      tidyselect::matches("(26559|26590)\\.2"), # ASEG caudate
+      tidyselect::matches("(26560|26591)\\.2"), # ASEG putamen
+      tidyselect::matches("(26561|26592)\\.2"), # ASEG pallidum
+      tidyselect::matches("(26562|26593)\\.2"), # ASEG hippocampus
+      tidyselect::matches("(26563|26594)\\.2"), # ASEG amygdala
+      tidyselect::matches("(26564|26595)\\.2"), # ASEG accumbens
+      tidyselect::matches("(26714|26715)\\.2"), # FS SUBSEG whole-thalamus
+      tidyselect::matches("(26641|26663)\\.2"), # FS SUBSEG whole-hippocampus
+      tidyselect::matches("(26609|26619)\\.2") # FS SUBSEG whole-amygdala
+    ) |>
+    na.omit() |>
+    dplyr::collect() |>
+    tidyr::pivot_longer(
+      c(-f.eid, -sex, -age, -t1_motion, -acq_day, -head_size, -icv, -site)) |>
+    dplyr::mutate(
+      hemisphere = dplyr::case_when(
+        stringr::str_detect(
+          name, 
+          "25011|25013|25015|25017|25019|25021|25023|26714|26641|26609|26558|26559|26560|26561|26562|26563|26564"
+        ) ~ "Left",
+        TRUE ~ "Right"
+      ),
+      source = dplyr::case_when(
+        stringr::str_detect(name, "26714|26715|26641|26663|6609|26619") ~ "FSSUBSEG",
+        stringr::str_detect(
+          name, 
+          "25011|25012|25013|25014|25015|25016|25017|25018|25019|25020|25021|25022|25023|25024"
+        ) ~ "FIRST",
+        TRUE ~ "FreeSurfer"
+      ),
+      StructName = dplyr::case_when(
+        stringr::str_detect(name, "25011|25012|26558|26589|26714|26715") ~ "Thalamus",
+        stringr::str_detect(name, "25013|25014|26559|26590") ~ "Caudate",
+        stringr::str_detect(name, "25015|25016|26560|26591") ~ "Putamen",
+        stringr::str_detect(name, "25017|25018|26561|26592") ~ "Pallidum",
+        stringr::str_detect(name, "25019|25020|26562|26593|26641|26663") ~"Hippocampus",
+        stringr::str_detect(name, "25021|25022|26563|26594|26609|26619") ~ "Amygdala",
+        stringr::str_detect(name, "25023|25024|26564|26595") ~ "Accumbens"
+      ),
+      instance = stringr::str_extract(name, ".([23]).", group=1),
+      value = value / 1000
+    ) |>
+    dplyr::select(-name, -instance) |>
+    tidyr::unite(Structure, c(hemisphere, StructName, source)) |>
+    tidyr::pivot_wider(names_from = Structure) |>
+    na.omit() |>
+    dplyr::select(-tidyselect::ends_with("FSSUBSEG"))
+}
 ```
 
 
-# UKB
+```{r}
+hcp <- readr::read_csv("data/HCP1200.csv") |>
+  rename(sub=Subject)
 
-```{r ukb_load}
-ukb <- arrow::open_dataset(here::here("data/ukb677207_bulk.parquet")) |>
-  select(sub = eid, sex = f.31.0.0, age = f.21003.2.0, site = f.54.2.0, starts_with("f.21000"), bmi = f.21001.2.0) |>
-  rename(ethnicity = f.21000.0.0) |>
-  mutate(ethnicity = if_else(is.na(ethnicity), f.21000.1.0, ethnicity)) |>
-  mutate(ethnicity = if_else(is.na(ethnicity), f.21000.2.0, ethnicity)) |>
-  select(-starts_with("f.21000")) |>
+hcp2 <- readr::read_csv("data/RESTRICTED_martin_2_5_2024_10_18_28.csv") |>
+  rename(sub=Subject)
+
+hcp_motion <- arrow::open_dataset("/Users/psadil/Desktop/motion_tmp/hcps12000.parquet") |>
+  group_by(sub, ped, task, ses) |>
+  summarise(fd = mean(fd)) |>
   collect() |>
-  mutate(sub = as.character(sub))
+  left_join(hcp) |>
+  left_join(hcp2) 
 ```
 
-
-```{r ukb_plot}
-ukb |>
-  ggplot(aes(x = age, y = sex)) +
-  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
-  ggdist::stat_dotsinterval(
-    side = "bottom",
-    scale = 0.7,
-    slab_linewidth = NA,
-    quantiles = 100
-  )
-```
-
-
-```{r ukb_table}
-ukb_N <- count(ukb) |>
-  mutate(name = "N")
-
-ukb_age <- ukb |>
-  summarise(
-    n = mean(age, na.rm = TRUE) |> round(digits = 2),
-    parens = sd(age, na.rm = TRUE) |> round(digits = 2)
-  ) |>
-  mutate(name = "age")
-
-ukb_female <- count(ukb, sex) |>
-  mutate(parens = n / sum(n)) |>
-  filter(forcats::fct_match(sex, "Female")) |>
-  mutate(name = "sex") |>
-  select(-sex)
-
-bind_rows(ukb_N, ukb_age, ukb_female) |>
-  select(name, n, `sd,%` = parens) |>
-  gt::gt() |>
-  gt::fmt_number()
-```
-
-
-
-# ABCD
-
-```{r abcd_load}
-abcd_subs <- arrow::open_dataset(here::here("data/dvars/dataset=abcd"), format = "ipc") |>
-  distinct(sub, ses) |>
-  collect()
-
-abcd <- readr::read_tsv(
-  "/Users/psadil/data/events/sourcedata/image03.tsv",
-  col_select = c(src_subject_id, interview_age, sex, visit, interview_date)
-) |>
-  rename(sub = src_subject_id, age = interview_age, ses = visit) |>
-  mutate(
-    sub = stringr::str_remove(sub, "_"),
-    ses = case_match(
-      ses,
-      "baseline_year_1_arm_1" ~ "baselineYear1Arm1",
-      "2_year_follow_up_y_arm_1" ~ "2YearFollowUpYArm1",
-      "4_year_follow_up_y_arm_1" ~ "4YearFollowUpYArm1",
-      .default = ses
-    )
-  ) |>
-  semi_join(abcd_subs) |>
-  mutate(
-    interview_date = lubridate::as_date(interview_date, format = "%m/%d/%Y"),
-    age = age / 12,
-    ses = factor(
-      ses,
-      levels = c(
-        "baselineYear1Arm1",
-        "2YearFollowUpYArm1",
-        "4YearFollowUpYArm1"
-      )
-    )
-  ) |>
-  distinct()
-```
-
-
-
-```{r abcd_plot}
-abcd |>
-  ggplot(aes(x = age, y = sex)) +
-  facet_wrap(~ses) +
-  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
-  ggdist::stat_dotsinterval(
-    side = "bottom",
-    scale = 0.7,
-    slab_linewidth = NA,
-    quantiles = 100
-  )
-```
-
-
-```{r abcd_dates}
-abcd |>
-  ggplot(aes(x = interview_date, y = age)) +
-  facet_wrap(~ses) +
-  geom_point(alpha = 0.1)
-```
-
-
-# HCPYA
-
-
-```{r hcypa_load}
-hcpya_un <- readr::read_csv(here::here("data/unrestricted_martin_2_5_2024_10_18_12.csv")) |>
-  select(sub = Subject, gender = Gender)
-
-hcpya <- readr::read_csv(here::here("data/RESTRICTED_martin_2_5_2024_10_18_28.csv")) |>
-  select(sub = Subject, age = Age_in_Yrs) |>
-  left_join(hcpya_un, by = join_by(sub)) |>
-  mutate(sub = as.character(sub))
-```
-
-
-```{r hcpya_plot}
-hcpya |>
-  ggplot(aes(x = age, y = gender)) +
-  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
-  ggdist::stat_dotsinterval(
-    side = "bottom",
-    scale = 0.7,
-    slab_linewidth = NA,
-    quantiles = 100
-  )
-```
-
-
-```{r hcpya_table}
-hcpya_N <- count(hcpya) |>
-  mutate(name = "N")
-
-hcpya_age <- hcpya |>
-  summarise(
-    n = mean(age, na.rm = TRUE) |> round(digits = 2),
-    parens = sd(age, na.rm = TRUE) |> round(digits = 2)
-  ) |>
-  mutate(name = "age")
-
-hcpya_female <- count(hcpya, gender) |>
-  mutate(parens = n / sum(n)) |>
-  filter(gender == "F") |>
-  mutate(name = "sex") |>
-  select(-gender)
-
-bind_rows(hcpya_N, hcpya_age, hcpya_female) |>
-  select(name, n, `sd,%` = parens) |>
-  gt::gt() |>
-  gt::fmt_number()
-```
-
-
-# SpaceTop
-
-```{r spacetop_load}
-spacetop <- readr::read_tsv(here::here("data/participants.tsv"), col_select = c(-group)) |>
-  rename(sub = participant_id) |>
-  mutate(
-    sex = case_match(
-      sex,
-      "M" ~ "Male",
-      "F" ~ "Female"
-    )
-  ) |>
-  mutate(sub = as.character(sub))
-```
-
-```{r spacetop_plot}
-spacetop |>
-  ggplot(aes(x = age, y = sex)) +
-  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
-  ggdist::stat_dotsinterval(
-    side = "bottom",
-    scale = 0.7,
-    slab_linewidth = NA,
-    quantiles = 100
-  )
-```
-
-
-
-```{r spacetop_table}
-spacetop_N <- count(spacetop) |>
-  mutate(name = "N")
-
-spacetop_age <- spacetop |>
-  summarise(
-    n = mean(age, na.rm = TRUE) |> round(digits = 2),
-    parens = sd(age, na.rm = TRUE) |> round(digits = 2)
-  ) |>
-  mutate(name = "age")
-
-spacetop_female <- count(spacetop, sex) |>
-  mutate(parens = n / sum(n)) |>
-  filter(forcats::fct_match(sex, "Female")) |>
-  mutate(name = "sex") |>
-  select(-sex)
-
-bind_rows(spacetop_N, spacetop_age, spacetop_female) |>
-  select(name, n, `sd,%` = parens) |>
-  gt::gt() |>
-  gt::fmt_number()
-```
-
-# HCP-Aging
 
 ```{r}
-hcp_aging_header <- readr::read_tsv(here::here("data/ndar_subject01_hcpaging.txt"), n_max = 1)
 
-hcp_aging <- readr::read_tsv(here::here("data/ndar_subject01_hcpaging.txt"), skip = 2, col_names = colnames(hcp_aging_header)) |>
-  select(sub = src_subject_id, age = interview_age) |>
-  mutate(
-    age = age / 12,
-    sub = stringr::str_remove(sub, "HCA") |> as.integer() |> as.character()
-  )
+hcp_motion  |>
+  crossing(fd_thresh = seq(0.1, 1, by=0.1)) |>
+  mutate(exclude = fd > fd_thresh) |>
+  summarise(
+    exclude = mean(exclude),
+    .by = (fd_thresh)) |>
+  mutate(fd_thresh = factor(fd_thresh)) |>
+  ggplot(aes(x = fd_thresh, y = exclude)) +
+  geom_bar() +
+  ylim(0, 1)
+
 ```
 
 
-# HCP-Dec
+
+
 
 ```{r}
-hcp_dev_header <- readr::read_tsv(here::here("data/ndar_subject01_hcpdev.txt"), n_max = 1)
 
-hcp_dev <- readr::read_tsv(here::here("data/ndar_subject01_hcpdev.txt"), skip = 2, col_names = colnames(hcp_aging_header)) |>
-  select(sub = src_subject_id, age = interview_age) |>
-  mutate(age = age / 12) |>
-  mutate(sub = stringr::str_remove(sub, "HCD") |> as.integer() |> as.character())
+hcp_motion  |>
+  crossing(fd_thresh = seq(0.1, 1, by=0.1)) |>
+  mutate(exclude = fd > fd_thresh) |>
+  summarise(
+    exclude = mean(exclude),
+    .by = c(fd_thresh, Gender)) |>
+  mutate(fd_thresh = factor(fd_thresh)) |>
+  ggplot(aes(x = fd_thresh, y = exclude, fill=Gender)) +
+  geom_col(position = "dodge") +
+  ylim(0, 1)
+
 ```
 
 
-# All
-
-```{r all_plot}
-all_demos <- bind_rows(
-  list(
-    abcd = abcd,
-    ukb = ukb,
-    hcpya = hcpya,
-    spacetop = spacetop,
-    hcp_aging = hcp_aging,
-    hcp_dev = hcp_dev
-  ),
-  .id = "dataset"
-)
 
 
-all_demos |>
-  ggplot(aes(x = age, y = dataset)) +
-  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
-  ggdist::stat_dotsinterval(
-    side = "bottom",
-    scale = 0.7,
-    slab_linewidth = NA,
-    quantiles = 100
-  )
+```{r}
+
+hcp_motion  |>
+  crossing(fd_thresh = seq(0.1, 1, by=0.1)) |>
+  mutate(exclude = fd > fd_thresh) |>
+  summarise(
+    exclude = mean(exclude),
+    .by = c(fd_thresh, Age)) |>
+  mutate(fd_thresh = factor(fd_thresh)) |>
+  ggplot(aes(x = fd_thresh, y = exclude, fill=Age)) +
+  geom_col(position = "dodge") +
+  ylim(0, 1)
+
 ```
+
+
+
+```{r}
+
+hcp_motion  |>
+  ggplot(aes(x = Age_in_Yrs, y = fd, color=Gender)) +
+  geom_point()
+
+```
+
+
+```{r}
+
+Gender <- hcp_motion |>
+  ungroup() |>
+  crossing(fd_thresh = seq(0.1, 0.5, by=0.1)) |>
+  mutate(exclude = fd > fd_thresh) |>
+  summarise(
+    exclude = mean(exclude),
+    .by = c(fd_thresh, Gender)) |>
+  mutate(fd_thresh = factor(fd_thresh)) |>
+  ggplot(aes(fill=Gender, y=exclude, x=fd_thresh)) +
+  geom_col(position = "dodge")  +
+  ylim(0,1)
+
+BMI <- hcp_motion |>
+  ungroup() |>
+  filter(!is.na(BMI)) |>
+  mutate(
+    BMI = cut(
+      BMI, 
+      breaks = c(0, 18.5, 25, 30, 35, 40, Inf),
+      levels = c("underweight", "healthy", "overweight", "obese", "obese2", "obese3"))) |>
+  crossing(fd_thresh = seq(0.1, 0.5, by=0.1)) |>
+  mutate(exclude = fd > fd_thresh) |>
+  summarise(
+    exclude = mean(exclude),
+    .by = c(fd_thresh, BMI)) |>
+  mutate(fd_thresh = factor(fd_thresh)) |>
+  ggplot(aes(x=fd_thresh, y=exclude, fill=BMI)) +
+  geom_col(position = "dodge")  +
+  ylim(0,1)
+
+
+Age <- hcp_motion |>
+  ungroup() |>
+  crossing(fd_thresh = seq(0.1, 0.5, by=0.1)) |>
+  mutate(exclude = fd > fd_thresh) |>
+  summarise(
+    exclude = mean(exclude),
+    .by = c(fd_thresh, Age)) |>
+  mutate(fd_thresh = factor(fd_thresh)) |>
+  ggplot(aes(x=fd_thresh, y=exclude, fill=Age)) +
+  geom_col(position = "dodge")  +
+  ylim(0,1)
+
+BloodPressure <- hcp_motion |>
+  ungroup() |>
+  filter(!is.na(BPSystolic)) |>
+  crossing(fd_thresh = seq(0.1, 0.5, by=0.1)) |>
+  mutate(
+    BPDiastolic = cut(
+      BPDiastolic, 
+      breaks = c(0, 60, 80, 90, 120, Inf))) |>
+  mutate(exclude = fd > fd_thresh) |>
+  summarise(
+    exclude = mean(exclude),
+    .by = c(fd_thresh, BPDiastolic)) |>
+  mutate(fd_thresh = factor(fd_thresh)) |>
+  ggplot(aes(x=fd_thresh, y=exclude, fill=BPDiastolic)) +
+  geom_col(position = "dodge") +
+  ylim(0,1)
+
+
+Gender + BMI + Age + BloodPressure + plot_layout(nrow = 2)
+
+```
+
+
+
+```{r}
+
+ukb <- load_ukb_vols("/Users/psadil/git/manuscripts/auto-volume-comparisons/data/ukb677207_bulk.parquet") |> select(-starts_with("Left"), -starts_with("Right"))
+
+```
+
+
+
 

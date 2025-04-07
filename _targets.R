@@ -12,9 +12,7 @@ source("R/qc.R")
 
 targets::tar_option_set(
   trust_timestamps = TRUE,
-  format = "parquet",
-  controller = crew_controller_local(workers = 7),
-  storage = "worker"
+  format = "parquet"
 )
 
 
@@ -27,16 +25,9 @@ list(
     deployment = "main"
   ),
   tar_target(ukb, get_ukb(ukb_source, ukb_exclusion)),
-  tar_target(ukb_source2, "data/motion/derivatives2/ukb.parquet", format = "file"),
-  tar_target(
-    ukb2,
-    get_ukb(ukb_source2, ukb_exclusion),
-    deployment = "main"
-  ),
-  tar_target(include_ukb, get_include_ukb(ukb_beh)),
-  tar_target(ukb_reg, get_ukb_reg(ukb, include_ukb)),
+  tar_target(ukb_beh, "data/ukb677207_bulk.parquet", format = "file"),
   tar_target(ukb_design_mat, "data/ukb/design.mat", format = "file"),
-  tar_target(ukb_events, get_ukb_design(ukb_design_mat)),
+  # tar_target(ukb_events, get_ukb_design(ukb_design_mat)),
   tar_target(ukb_eprime, "data/1000513_25748_2_0.txt", format = "file"),
   tar_target(ukb_responses, get_ukb_responses(ukb_eprime)),
   tar_target(
@@ -59,7 +50,6 @@ list(
     get_spacetop(spacetop_source, spacetop_exclusion),
     deployment = "main"
   ),
-  tar_target(ukb_beh, "data/ukb677207_bulk.parquet", format = "file"),
   tar_target(
     hcpya_source,
     "data/motion/derivatives/human-connectome-project-openaccess.parquet",
@@ -71,7 +61,7 @@ list(
     get_hcp(hcpya_source, hcpya_exclusion),
     deployment = "main"
   ),
-  tar_target(hcpya_events, get_hcpya_events("data/hcp_evs")),
+  # tar_target(hcpya_events, get_hcpya_events("data/hcp_evs")),
   tar_target(
     hcpa_source,
     "data/motion/derivatives/HCPAgingRec.parquet",
@@ -97,7 +87,7 @@ list(
     format = "file"
   ),
   tar_target(abcd_exclusion, get_abcd_exclusion(abcd_source, abcd_demographics)),
-  tar_target(abcd_events, get_abcd_events()),
+  # tar_target(abcd_events, get_abcd_events()),
   tar_target(abcd, get_abcd(abcd_source, abcd_exclusion)),
   tarchetypes::tar_group_by(
     datasets,
@@ -149,13 +139,6 @@ list(
     write_demographics(demographics, "data/demographics/demographics.tsv"),
     format = "file"
   ),
-  tar_target(
-    hcp_sources,
-    fs::dir_ls("data/hcp", recurse = TRUE, glob = "*txt"),
-    format = "file"
-  ),
-  tar_target(hcp_beh, "data/hcp_beh_2_8_2024_15_20_20.csv", format = "file"),
-  tar_target(hcp, get_hcp(hcp_sources, exclude_hcp)),
   tar_target(mriqc_bold, get_mriqc_bold()),
   tar_target(
     lost_strict,
@@ -167,14 +150,14 @@ list(
   tar_target(
     hcpa_spectrum,
     get_hcpa_spectrum(
-      src = "/Users/psadil/data/motion/derivatives/hcpa_spectrum.parquet",
+      src = "data/motion/derivatives/hcpa_spectrum.parquet",
       by_run = by_run
     )
   ),
   tar_target(
     hcpd_spectrum,
     get_hcpd_spectrum(
-      src = "/Users/psadil/data/motion/derivatives/hcpd_spectrum.parquet",
+      src = "data/motion/derivatives/hcpd_spectrum.parquet",
       by_run = by_run,
       hcpd_exclusion
     )
@@ -182,7 +165,7 @@ list(
   tar_target(
     hcpya_spectrum,
     get_hcpya_spectrum(
-      src = "/Users/psadil/data/motion/derivatives/hcpya_spectrum.parquet",
+      src = "data/motion/derivatives/hcpya_spectrum.parquet",
       by_run = by_run,
       excluded = hcpya_exclusion
     )
@@ -190,7 +173,7 @@ list(
   tar_target(
     abcd_spectrum,
     get_abcd_spectrum(
-      src = "/Users/psadil/data/motion/derivatives/abcd_spectrum.parquet",
+      src = "data/motion/derivatives/abcd_spectrum.parquet",
       by_run = by_run,
       excluded = abcd_exclusion
     )
@@ -198,27 +181,11 @@ list(
   tar_target(
     spacetop_spectrum,
     get_spacetop_spectrum(
-      src = "/Users/psadil/data/motion/derivatives/spacetop_spectrum.parquet",
+      src = "data/motion/derivatives/spacetop_spectrum.parquet",
       by_run = by_run,
       excluded = spacetop_exclusion
     )
   ),
-  tar_target(
-    datasets2,
-    dplyr::ungroup(bind_datasets(list(ukb = ukb2))),
-  ),
-  tar_target(
-    by_run2,
-    summarise_by(datasets2, .cols = c(dataset, task, scan, ses, sub, filtered)),
-    pattern = map(datasets2)
-  ),
-  tar_target(
-    lost_strict2,
-    get_lost_strict(datasets2, by_run = by_run2),
-    pattern = map(datasets2)
-  ),
-  tar_target(lost_lenient2, get_lost_lenient(by_run = by_run2)),
-  tar_target(lost2, bind_lost(strict = lost_strict2, lenient = lost_lenient2)),
   tar_target(
     qc_fd_hcpya,
     get_qc_fd_hcpya(hcpya = hcpya, by_run = by_run, n_iter = 100, n_sub = 50),
@@ -242,14 +209,4 @@ list(
     get_cor_by_thresh_hcpya_gold(qc_fd_hcpya_sub, cleaned = cleaned),
     pattern = cross(map(qc_fd_hcpya_sub), cleaned)
   )
-  # tar_target(
-  #   qcs_cor0,
-  #   get_cor_by_thresh_hcpya(
-  #     tidyr::unnest(qc_fd_hcpya_iter, data),
-  #     gold=qcs_cor_hcpya_gold,
-  #     cleaned=cleaned,
-  #     window_width=window_width
-  #   ),
-  #   pattern = cross(map(qc_fd_hcpya_iter), cleaned)
-  # )
 )

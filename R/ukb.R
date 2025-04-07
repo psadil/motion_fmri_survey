@@ -18,13 +18,6 @@ get_ukb_exclusion <- function(src = "data/exclusion/ukb_exclusion.tsv") {
     dplyr::rename(sub = subject_id)
 }
 
-get_ukb_reg <- function(ukb, include_ukb) {
-  ukb |>
-    dplyr::mutate(ntr = dplyr::n(), .by = c(sub, ses)) |>
-    dplyr::filter(ntr == 332) |>
-    dplyr::select(-ntr) |>
-    dplyr::semi_join(include_ukb, by = dplyr::join_by(sub))
-}
 
 get_ukb_design <- function(mat) {
   # readr::read_tsv(
@@ -55,16 +48,6 @@ get_ukb_design <- function(mat) {
     dplyr::select(onset, duration, type = Stimulus)
 }
 
-get_include_ukb <- function(path) {
-  polars::pl$scan_parquet(
-    path
-  )$select(
-    "eid"
-  )$rename(
-    sub = "eid"
-  )$collect()$to_data_frame() |>
-    tibble::as_tibble()
-}
 
 get_ukb_responses <- function(src = "data/1000513_25748_2_0.txt") {
   txt <- rprime::read_eprime(src) |>
