@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --job-name=mse
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=10G
+#SBATCH --time=1:00:00
+#SBATCH --array=1-9
+#SBATCH --output logs/dvars_abcd_%a.log
+#SBATCH --constraint="intel&(haswell|broadwell|cascadelake)"
+
+module load singularity
+
+singularity run \
+  -e \
+  --env POLARS_MAX_THREADS=1 \
+  --bind "${MYSCRATCH}" \
+  --bind /dcs07/smart/data \
+  docker://psadil/dvars:241101 \
+   python run.py "${SLURM_ARRAY_TASK_ID}" hcpya_srcs "${PWD}"/derivatives/outliers

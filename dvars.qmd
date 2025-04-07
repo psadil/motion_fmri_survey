@@ -1,0 +1,70 @@
+---
+title: "dvars"
+format: html
+---
+
+```{r}
+library(dplyr)
+library(arrow)
+library(tidyr)
+library(ggplot2)
+library(patchwork)
+```
+
+
+```{r}
+
+d <- arrow::open_dataset("/Users/psadil/data/dvars/derivatives/dvars", format = "ipc") |> 
+  filter(t>0, dataset == "ukb") |>
+  dplyr::collect()
+
+```
+
+
+```{r}
+avgs <- d |>
+  filter(dataset=="ukb") |>
+  summarise(DPD = mean(DPD), .by = sub) 
+
+highest <- avgs |> slice_max(n=10, order_by=DPD) |> select(sub)
+lowest <- avgs |> slice_min(n=10, order_by=DPD) |> select(sub)
+
+```
+
+
+```{r}
+a <- d |>
+  semi_join(highest) |>
+  select(-ses, -dataset) |>
+  pivot_longer(c(starts_with("D"),"ZD")) |>
+  ggplot(aes(x=t, y=value)) +
+  facet_grid(name~sub, scales = "free_y") +
+  geom_line() +
+  ggtitle("10 Highest DPD")
+
+b <- d |>
+  semi_join(lowest) |>
+  select(-ses, -dataset) |>
+  pivot_longer(c(starts_with("D"),"ZD")) |>
+  ggplot(aes(x=t, y=value)) +
+  facet_grid(name~sub, scales = "free_y") +
+  geom_line() +
+  ggtitle("10 Lowest DPD")
+
+a + b
+```
+
+
+```{r}
+d |>
+  filter(dataset=="HCPAgingRec") |>
+  mutate(
+    dir = stringr::str_extract(ses, "_AP_|_PA_"),
+    task = stringr::str_extract(ses, "REST|VISMOTOR|CARIT|FACENAME")
+  ) |>
+  pivot_longer(c(starts_with("D", ignore.case=FALSE),"ZD")) |>
+  ggplot(aes(x=t, y=value, group=dir)) +
+  facet_grid(name~sub+task, scales = "free") +
+  geom_point()
+```
+

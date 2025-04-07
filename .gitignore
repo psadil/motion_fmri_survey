@@ -8,3 +8,12 @@ data/*
 index*
 Untitled*
 *nii
+*gz
+*_files
+*_cache
+*html
+*parquet
+data/motion/*
+*arrow
+figures
+*rmarkdown

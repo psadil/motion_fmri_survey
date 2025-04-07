@@ -1,0 +1,33 @@
+#!/bin/bash
+
+hp (){
+  local sub=$1
+
+  local hcpya=/dcs07/smart/data/human-connectome-project-openaccess/HCP1200
+  local dst=/fastscratch/myscratch/pssadil/hcpya_hp
+  local hp=2000
+  local fmri=$hcpya/"${sub}"/MNINonLinear/Results/rfMRI_REST1_LR/rfMRI_REST1_LR_Atlas_MSMAll.dtseries.nii
+
+  echo "Running highpass on ${fmri}"
+  tr=0.72
+  hptr=$(echo "scale = 10; $hp / (2 * $tr)" | bc -l)
+
+  local sub_dst=$dst/"${sub}"
+  mkdir "${sub_dst}"
+  fmrihp="${sub_dst}"/rfMRI_REST1_LR_Atlas_MSMAll.dtseries.nii
+
+  # Starting with FSL 5.0.7, 'fslmaths -bptf' no longer includes the temporal mean in its output.
+  # A work-around to this, which works with both the pre- and post-5.0.7 behavior is to compute
+  # the temporal mean, remove it, run -bptf, and then add the mean back in.
+  fslmaths "${fmri}" -Tmean "${fmrihp}"
+  fslmaths "${fmri}" -sub "${fmrihp}" -bptf "${hptr}" -1 -add "${fmrihp}" "${fmrihp}"
+}
+export -f hp
+# from https://github.com/Washington-University/HCPpipelines/blob/cf710316a8923516a9220d844e84348a33f2a306/ICAFIX/hcp_fix#L251-L270
+
+
+mapfile -t subs < <(find /dcs07/smart/data/human-connectome-project-openaccess/HCP1200 -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+
+for sub in "${subs[@]}"; do
+  hp "${sub}"
+done

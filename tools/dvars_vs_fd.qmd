@@ -1,0 +1,586 @@
+---
+title: "fd-vs-dvars"
+format: 
+  html:
+    page-layout: full
+execute: 
+  echo: false
+  cache: true
+  warning: false
+---
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(purrr)
+library(stringr)
+
+hcpya_not_avail <- c(
+  110613, 113417, 113821, 120010, 121719, 130518, 139637, 143830, 146836,
+  168139, 175035, 176239, 185038, 189652, 199958, 201515, 202820, 385046,
+  401422, 415837, 433839, 462139, 465852, 469961, 644246, 656657, 688569,
+  723141, 767464, 872764, 943862, 965367, 969476, 987983, 994273, 433839,
+  # https://wiki.humanconnectome.org/docs/HCP%20Data%20Release%20Updates%20Known%20Issues%20and%20Planned%20fixes.html
+  # 3T Functional Preprocessing Error of all 3T “RL” fMRI runs in 25 Subjects
+  103010, 113417, 116423, 120010, 121719, 127226, 130114, 143830, 169040,
+  185038, 189652, 202820, 204218, 329844, 385046, 401422, 462139, 469961,
+  644246, 688569, 723141, 908860, 943862, 969476, 971160,
+  196952, 748662, 809252, 144428, 186545, 192237, 223929, 320826, 644044,
+  822244, 870861, 947668,
+  # Subjects without Field Maps for Structural scans
+  102614, 111009, 111514, 115017, 121416, 130821, 138332, 179952, 299760,
+  300618, 392750, 406432, 429040, 633847, 662551, 679770, 688569, 693461,
+  815247,
+  # duplicated name
+  142626
+)
+
+get_overlap <- function(dvars, motion, trs_df, subs_df, ..., thresh) {
+  bind_rows(dvars, motion) |>
+    crossing(thresh = .env$thresh) |>
+    filter(value >= .data$thresh) |>
+    count(sub, name, thresh, ...) |>
+    left_join(trs_df) |>
+    mutate(n = n / n_tr) |>
+    crossing(n_thresh = seq(.1, .5, by = 0.1)) |>
+    filter(n > n_thresh) |>
+    select(-n) |>
+    pivot_wider(names_from = name, values_from = sub, values_fn = list) |>
+    rowwise() |>
+    mutate(
+      fd_only = length(setdiff(.data$framewise_displacement, .data$DPD)),
+      dvars_only = length(setdiff(.data$DPD, .data$framewise_displacement)),
+      both = length(intersect(.data$framewise_displacement, .data$DPD)),
+    ) |>
+    select(-DPD, -framewise_displacement) |>
+    pivot_longer(c(fd_only, dvars_only, both), names_to = "measure") |>
+    left_join(subs_df) |>
+    mutate(value = value / n_sub) |>
+    mutate(
+      measure = case_match(
+        measure,
+        "both" ~ "both",
+        "dvars_only" ~ "DPD only",
+        "fd_only" ~ "FD only"
+      ),
+      n_thresh = glue::glue("prop frames\nthresh: {n_thresh}"),
+    )
+}
+```
+
+## UKB
+
+```{r ukb_dpd}
+ukb_dpd <- arrow::open_dataset(here::here("data/ukb_dvars.parquet")) |>
+  mutate(
+    keep = (task == "faces/shape" & t < 332) |
+      (task == "rest" & t < 490)
+  ) |>
+  filter(t > 0, keep) |>
+  summarise(
+    DPD = mean(DPD),
+    .by = c(t, task, ses)
+  ) |>
+  collect()
+
+ukb_dpd |>
+  ggplot(aes(x = t, y = DPD)) +
+  facet_grid(task ~ ses, scales = "free", labeller = label_both) +
+  geom_line()
+```
+
+
+```{r}
+ukb_dvars <- arrow::open_dataset(here::here("data/ukb_dvars.parquet")) |>
+  mutate(
+    keep = (task == "faces/shape" & t < 332) |
+      (task == "rest" & t < 490)
+  ) |>
+  filter(t > 0, keep) |>
+  mutate(DPD = abs(DPD - mean(DPD))) |>
+  select(t, task, ses, sub, DPD) |>
+  collect() |>
+  mutate(
+    DPD = rank(DPD) / n(),
+    .by = c(task, ses)
+  ) |>
+  filter(DPD > 0.5) |>
+  pivot_longer(DPD)
+
+ukb_motion <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/ukb.parquet") |>
+  mutate(
+    keep = (stringr::str_detect(datatype, "20249") & t < 332) |
+      (stringr::str_detect(datatype, "20227") & t < 490),
+    ses = as.integer(ses)
+  ) |>
+  filter(t > 0, keep) |>
+  select(t, datatype, sub, framewise_displacement, ses) |>
+  collect() |>
+  mutate(
+    framewise_displacement = rank(framewise_displacement) / n(),
+    .by = c(datatype)
+  ) |>
+  filter(framewise_displacement > 0.5) |>
+  mutate(
+    task = if_else(datatype == "20227", "rest", "faces/shape")
+  ) |>
+  select(-datatype) |>
+  pivot_longer(framewise_displacement)
+
+ukb_subs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/ukb.parquet"
+) |>
+  distinct(datatype, sub, ses) |>
+  count(datatype, ses, name = "n_sub") |>
+  collect() |>
+  mutate(
+    ses = as.integer(ses),
+    task = if_else(datatype == "20227", "rest", "faces/shape")
+  ) |>
+  select(-datatype)
+
+ukb_trs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/ukb.parquet"
+) |>
+  mutate(
+    keep = (stringr::str_detect(datatype, "20249") & t < 332) |
+      (stringr::str_detect(datatype, "20227") & t < 490)
+  ) |>
+  filter(t > 0, keep) |>
+  distinct(datatype, t) |>
+  count(datatype, name = "n_tr") |>
+  collect() |>
+  mutate(
+    task = if_else(datatype == "20227", "rest", "faces/shape")
+  ) |>
+  select(-datatype)
+
+ukb_overlap <- purrr::map(
+  seq(0.5, 0.99, by = 0.1),
+  ~ get_overlap(
+    dvars = ukb_dvars,
+    motion = ukb_motion,
+    trs_df = ukb_trs,
+    subs_df = ukb_subs,
+    task, ses,
+    thresh = .x
+  )
+) |>
+  bind_rows()
+
+rm(ukb_subs, ukb_dvars)
+```
+
+```{r}
+dvtmp <- ukb_dvars |>
+  count(sub, name, task, ses) |>
+  left_join(ukb_trs) |>
+  mutate(n = n / n_tr) |>
+  crossing(n_thresh = seq(.1, .5, by = 0.1)) |>
+  filter(n > n_thresh) |>
+  select(-n, -n_tr) |>
+  pivot_wider(names_from = name, values_from = sub, values_fn = list)
+
+
+fdtmp <- ukb_motion |>
+  crossing(thresh = c(0.2, 0.3, 0.4, 0.5)) |>
+  filter(value >= .data$thresh) |>
+  count(sub, name, thresh, task, ses) |>
+  left_join(ukb_trs) |>
+  mutate(n = n / n_tr) |>
+  crossing(n_thresh = seq(.1, .5, by = 0.1)) |>
+  filter(n > n_thresh) |>
+  select(-n, -n_tr) |>
+  pivot_wider(names_from = name, values_from = sub, values_fn = list)
+
+ukb_overlap <- left_join(fdtmp2, dvtmp) |>
+  rowwise() |>
+  mutate(
+    fd_only = length(setdiff(.data$framewise_displacement, .data$DPD)),
+    dvars_only = length(setdiff(.data$DPD, .data$framewise_displacement)),
+    both = length(intersect(.data$framewise_displacement, .data$DPD)),
+  ) |>
+  select(-DPD, -framewise_displacement) |>
+  pivot_longer(c(fd_only, dvars_only, both), names_to = "measure") |>
+  left_join(ukb_subs) |>
+  mutate(value = value / n_sub) |>
+  mutate(
+    measure = case_match(
+      measure,
+      "both" ~ "both",
+      "dvars_only" ~ "DPD only",
+      "fd_only" ~ "FD only"
+    ),
+    n_thresh = glue::glue("prop frames\nthresh: {n_thresh}"),
+  )
+```
+
+
+```{r}
+#| fig-height: 6
+#| fig-width: 8
+
+ukb_overlap |>
+  mutate(ses = factor(ses)) |>
+  ggplot(aes(x = thresh, y = value, linetype = measure, color = ses)) +
+  facet_grid(n_thresh ~ task) +
+  geom_line(alpha = 0.5) +
+  ylab("Proportion Participants Excluded") +
+  xlab("Framewise Displacement Threshold (mm)") +
+  theme(
+    legend.position = "bottom"
+  )
+```
+
+## ABCD
+
+```{r}
+abcd_dvars <- arrow::open_dataset(here::here("data", "abcd_dvars.parquet")) |>
+  filter(
+    t > 10,
+    !run %in% c("05|06"),
+    (task == "rest") | (!task == "rest" & t <= 380)
+  ) |>
+  mutate(DPD = abs(DPD - mean(DPD)), .by = c(task, ses)) |>
+  select(t, task, run, sub, DPD, ses) |>
+  collect() |>
+  mutate(
+    DPD = rank(DPD) / n(),
+    .by = c(task, ses)
+  ) |>
+  filter(DPD > 0.5) |>
+  pivot_longer(DPD)
+
+abcd_motion <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/abcd.parquet") |>
+  filter(
+    t > 10,
+    !run %in% c("05", "06"),
+    task == "rest" | (!task == "rest" & t <= 380)
+  ) |>
+  mutate(framewise_displacement = abs(framewise_displacement)) |>
+  select(t, task, run, ses, sub, framewise_displacement) |>
+  collect() |>
+  mutate(
+    framewise_displacement = rank(framewise_displacement) / n(),
+    .by = c(task, ses)
+  ) |>
+  filter(framewise_displacement > 0.5) |>
+  pivot_longer(framewise_displacement)
+
+
+abcd_subs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/abcd.parquet"
+) |>
+  distinct(task, sub, ses) |>
+  count(task, ses, name = "n_sub") |>
+  collect()
+
+abcd_trs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/abcd.parquet"
+) |>
+  filter(
+    t > 10,
+    !run %in% c("05", "06"),
+    task == "rest" | (!task == "rest" & t <= 380)
+  ) |>
+  distinct(task, t) |>
+  count(task, name = "n_tr") |>
+  collect()
+
+abcd_overlap <- purrr::map(
+  seq(0.5, 0.99, by = 0.1),
+  ~ get_overlap(
+    dvars = abcd_dvars,
+    motion = abcd_motion,
+    trs_df = abcd_trs,
+    subs_df = abcd_subs,
+    task, ses,
+    thresh = .x
+  )
+) |>
+  bind_rows()
+
+rm(abcd_motion, abcd_dvars)
+```
+
+
+```{r}
+#| fig-height: 6
+#| fig-width: 8
+
+abcd_overlap |>
+  ggplot(aes(x = thresh, y = value, linetype = measure, color = ses)) +
+  facet_grid(n_thresh ~ task) +
+  geom_line(alpha = 0.5) +
+  ylab("Proportion Participants Excluded") +
+  xlab("Framewise Quantile Threshold") +
+  theme(
+    legend.position = "bottom",
+    legend.box = "vertical"
+  )
+```
+
+## HCPYA
+
+```{r}
+hcpya_motion <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/human-connectome-project-openaccess.parquet"
+) |>
+  filter(!sub %in% hcpya_not_avail) |>
+  mutate(framewise_displacement = abs(framewise_displacement)) |>
+  select(t, task, ped, sub, framewise_displacement) |>
+  collect() |>
+  mutate(
+    framewise_displacement = rank(framewise_displacement) / n(),
+    .by = c(task, ped)
+  ) |>
+  filter(framewise_displacement > 0.5) |>
+  pivot_longer(framewise_displacement) |>
+  mutate(ica_cleaned = FALSE)
+
+hcpya_dvars <- arrow::open_dataset(
+  here::here("data/dvars/dataset=human-connectome-project-openaccess/"),
+  format = "arrow"
+) |>
+  filter(str_detect(src, "MSM")) |>
+  filter(!sub %in% hcpya_not_avail) |>
+  mutate(DPD = abs(DPD - mean(DPD))) |>
+  select(t, src, sub, DPD) |>
+  collect() |>
+  mutate(
+    DPD = rank(DPD) / n(),
+    .by = c(src)
+  ) |>
+  filter(DPD > 0.5) |>
+  mutate(
+    ped = str_extract(src, "RL|LR"),
+    task = str_extract(src, "WM|REST1|REST2|EMOTION|RELATIONAL|MOTOR|GAMBLING|SOCIAL|LANGUAGE"),
+    ica_cleaned = str_detect(src, "clean")
+  ) |>
+  select(-src) |>
+  pivot_longer(DPD)
+
+hcpya_subs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/human-connectome-project-openaccess.parquet"
+) |>
+  filter(!sub %in% hcpya_not_avail) |>
+  distinct(task, sub) |>
+  count(task, name = "n_sub") |>
+  collect()
+
+hcpya_trs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/human-connectome-project-openaccess.parquet"
+) |>
+  filter(!sub %in% hcpya_not_avail) |>
+  distinct(task, t) |>
+  count(task, name = "n_tr") |>
+  collect()
+
+hcpya_overlap <- purrr::map(
+  seq(0.5, 0.99, by = 0.1),
+  ~ get_overlap(
+    dvars = hcpya_dvars,
+    motion = hcpya_motion,
+    trs_df = hcpya_trs,
+    subs_df = hcpya_subs,
+    task, ped, ica_cleaned,
+    thresh = .x
+  )
+) |>
+  bind_rows()
+
+rm(hcpya_motion, hcpya_dvars)
+```
+
+```{r}
+#| fig-height: 6
+#| fig-width: 8
+
+hcpya_overlap |>
+  filter(!ica_cleaned) |>
+  ggplot(aes(x = thresh, y = value, linetype = measure, color = ped)) +
+  facet_grid(n_thresh ~ task) +
+  geom_line(alpha = 0.5) +
+  ylab("Proportion Participants Excluded") +
+  xlab("Framewise Quantile Threshold") +
+  theme(
+    legend.position = "bottom"
+  )
+```
+
+
+## HCPDev
+
+```{r}
+hcpdev_motion <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/HCPDevelopmentRec.parquet"
+) |>
+  mutate(framewise_displacement = abs(framewise_displacement)) |>
+  select(t, task, ped, sub, framewise_displacement) |>
+  collect() |>
+  mutate(
+    framewise_displacement = rank(framewise_displacement) / n(),
+    .by = c(task, ped)
+  ) |>
+  filter(framewise_displacement > 0.5) |>
+  pivot_longer(framewise_displacement)
+
+hcpdev_dvars <- arrow::open_dataset(
+  "/Users/psadil/data/dvars/derivatives/dvars/dataset=HCPDevelopmentRec",
+  format = "arrow"
+) |>
+  filter(str_detect(src, "Atlas_hp_preclean", negate = TRUE)) |>
+  filter(str_detect(src, "REST1a|REST1b|REST2a|REST2b", negate = TRUE)) |>
+  filter(!sub %in% hcpya_not_avail) |>
+  mutate(DPD = abs(DPD - mean(DPD))) |>
+  select(t, src, sub, DPD) |>
+  collect() |>
+  mutate(
+    DPD = rank(DPD) / n(),
+    .by = c(src)
+  ) |>
+  filter(DPD > 0.5) |>
+  mutate(
+    ped = str_extract(src, "AP|PA"),
+    task = str_extract(src, "REST1a|REST1b|REST2a|REST2b|REST1|REST2|EMOTION|GUESSING|CARIT"),
+  ) |>
+  select(-src) |>
+  pivot_longer(DPD)
+
+
+hcpdev_subs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/HCPDevelopmentRec.parquet"
+) |>
+  distinct(task, sub) |>
+  count(task, name = "n_sub") |>
+  collect()
+
+hcpdev_trs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/HCPDevelopmentRec.parquet"
+) |>
+  distinct(task, t) |>
+  count(task, name = "n_tr") |>
+  collect()
+
+hcpdev_overlap <- purrr::map(
+  seq(0.5, 0.99, by = 0.1),
+  ~ get_overlap(
+    dvars = hcpdev_dvars,
+    motion = hcpdev_motion,
+    trs_df = hcpdev_trs,
+    subs_df = hcpdev_subs,
+    task, ped,
+    thresh = .x
+  )
+) |>
+  bind_rows()
+
+rm(hcpdev_motion, hcpdv_dvars)
+```
+
+
+```{r}
+#| fig-height: 6
+#| fig-width: 8
+
+hcpdev_overlap |>
+  ggplot(aes(x = thresh, y = value, linetype = measure, color = ped)) +
+  facet_grid(n_thresh ~ task) +
+  geom_line(alpha = 0.5) +
+  ylab("Proportion Participants Excluded") +
+  xlab("Framewise Quantile Threshold") +
+  theme(
+    legend.position = "bottom"
+  )
+```
+
+
+## HCPAging
+
+
+```{r}
+hcpaging_motion <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/HCPAgingRec.parquet"
+) |>
+  mutate(framewise_displacement = abs(framewise_displacement)) |>
+  select(t, task, ped, sub, framewise_displacement) |>
+  collect() |>
+  mutate(
+    framewise_displacement = rank(framewise_displacement) / n(),
+    .by = c(task, ped)
+  ) |>
+  filter(framewise_displacement > 0.5) |>
+  pivot_longer(framewise_displacement)
+
+hcpaging_dvars <- arrow::open_dataset(
+  "/Users/psadil/data/dvars/derivatives/dvars/dataset=HCPAgingRec",
+  format = "arrow"
+) |>
+  filter(str_detect(src, "Atlas_hp_preclean", negate = TRUE)) |>
+  filter(str_detect(src, "REST1a|REST1b|REST2a|REST2b", negate = TRUE)) |>
+  filter(!sub %in% hcpya_not_avail) |>
+  mutate(DPD = abs(DPD - mean(DPD))) |>
+  select(t, src, sub, DPD) |>
+  collect() |>
+  mutate(
+    DPD = rank(DPD) / n(),
+    .by = c(src)
+  ) |>
+  filter(DPD > 0.5) |>
+  mutate(
+    ped = str_extract(src, "AP|PA"),
+    task = str_extract(src, "REST1a|REST1b|REST2a|REST2b|REST1|REST2|VISMOTOR|FACENAME|CARIT"),
+  ) |>
+  select(-src) |>
+  pivot_longer(DPD)
+
+
+hcpaging_subs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/HCPAgingRec.parquet"
+) |>
+  distinct(task, sub) |>
+  count(task, name = "n_sub") |>
+  collect()
+
+hcpaging_trs <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/HCPAgingRec.parquet"
+) |>
+  distinct(task, t) |>
+  count(task, name = "n_tr") |>
+  collect()
+
+hcpaging_overlap <- purrr::map(
+  seq(0.5, 0.99, by = 0.1),
+  ~ get_overlap(
+    dvars = hcpaging_dvars,
+    motion = hcpaging_motion,
+    trs_df = hcpaging_trs,
+    subs_df = hcpaging_subs,
+    task, ped,
+    thresh = .x
+  )
+) |>
+  bind_rows()
+
+rm(hcpaging_motion, hcpaging_dvars)
+```
+
+
+```{r}
+#| fig-height: 6
+#| fig-width: 8
+
+hcpaging_overlap |>
+  ggplot(aes(x = thresh, y = value, linetype = measure, color = ped)) +
+  facet_grid(n_thresh ~ task) +
+  geom_line(alpha = 0.5) +
+  ylab("Proportion Participants Excluded") +
+  xlab("Framewise Quantile Threshold") +
+  theme(
+    legend.position = "bottom"
+  )
+```
+
+
+## SpaceTop

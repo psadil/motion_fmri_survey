@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --job-name=qcrsfc
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+#SBATCH --time=1:00:00
+#SBATCH --array=2-10
+#SBATCH --output logs/%a.log
+#SBATCH --constraint="intel&(haswell|broadwell|cascadelake)"
+
+
+source ~/.bashrc
+
+mamba activate qcrsfc
+
+Rscript qcrsfc_cli.R "${SLURM_ARRAY_TASK_ID}"

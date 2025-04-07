@@ -1,0 +1,285 @@
+---
+title: "demographics"
+format: html
+execute: 
+  warning: false
+  cache: true
+---
+
+```{r setup}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+
+# UKB
+
+```{r ukb_load}
+ukb <- arrow::open_dataset(here::here("data/ukb677207_bulk.parquet")) |>
+  select(sub = eid, sex = f.31.0.0, age = f.21003.2.0, site = f.54.2.0, starts_with("f.21000"), bmi = f.21001.2.0) |>
+  rename(ethnicity = f.21000.0.0) |>
+  mutate(ethnicity = if_else(is.na(ethnicity), f.21000.1.0, ethnicity)) |>
+  mutate(ethnicity = if_else(is.na(ethnicity), f.21000.2.0, ethnicity)) |>
+  select(-starts_with("f.21000")) |>
+  collect() |>
+  mutate(sub = as.character(sub))
+```
+
+
+```{r ukb_plot}
+ukb |>
+  ggplot(aes(x = age, y = sex)) +
+  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
+  ggdist::stat_dotsinterval(
+    side = "bottom",
+    scale = 0.7,
+    slab_linewidth = NA,
+    quantiles = 100
+  )
+```
+
+
+```{r ukb_table}
+ukb_N <- count(ukb) |>
+  mutate(name = "N")
+
+ukb_age <- ukb |>
+  summarise(
+    n = mean(age, na.rm = TRUE) |> round(digits = 2),
+    parens = sd(age, na.rm = TRUE) |> round(digits = 2)
+  ) |>
+  mutate(name = "age")
+
+ukb_female <- count(ukb, sex) |>
+  mutate(parens = n / sum(n)) |>
+  filter(forcats::fct_match(sex, "Female")) |>
+  mutate(name = "sex") |>
+  select(-sex)
+
+bind_rows(ukb_N, ukb_age, ukb_female) |>
+  select(name, n, `sd,%` = parens) |>
+  gt::gt() |>
+  gt::fmt_number()
+```
+
+
+
+# ABCD
+
+```{r abcd_load}
+abcd_subs <- arrow::open_dataset(here::here("data/dvars/dataset=abcd"), format = "ipc") |>
+  distinct(sub, ses) |>
+  collect()
+
+abcd <- readr::read_tsv(
+  "/Users/psadil/data/events/sourcedata/image03.tsv",
+  col_select = c(src_subject_id, interview_age, sex, visit, interview_date)
+) |>
+  rename(sub = src_subject_id, age = interview_age, ses = visit) |>
+  mutate(
+    sub = stringr::str_remove(sub, "_"),
+    ses = case_match(
+      ses,
+      "baseline_year_1_arm_1" ~ "baselineYear1Arm1",
+      "2_year_follow_up_y_arm_1" ~ "2YearFollowUpYArm1",
+      "4_year_follow_up_y_arm_1" ~ "4YearFollowUpYArm1",
+      .default = ses
+    )
+  ) |>
+  semi_join(abcd_subs) |>
+  mutate(
+    interview_date = lubridate::as_date(interview_date, format = "%m/%d/%Y"),
+    age = age / 12,
+    ses = factor(
+      ses,
+      levels = c(
+        "baselineYear1Arm1",
+        "2YearFollowUpYArm1",
+        "4YearFollowUpYArm1"
+      )
+    )
+  ) |>
+  distinct()
+```
+
+
+
+```{r abcd_plot}
+abcd |>
+  ggplot(aes(x = age, y = sex)) +
+  facet_wrap(~ses) +
+  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
+  ggdist::stat_dotsinterval(
+    side = "bottom",
+    scale = 0.7,
+    slab_linewidth = NA,
+    quantiles = 100
+  )
+```
+
+
+```{r abcd_dates}
+abcd |>
+  ggplot(aes(x = interview_date, y = age)) +
+  facet_wrap(~ses) +
+  geom_point(alpha = 0.1)
+```
+
+
+# HCPYA
+
+
+```{r hcypa_load}
+hcpya_un <- readr::read_csv(here::here("data/unrestricted_martin_2_5_2024_10_18_12.csv")) |>
+  select(sub = Subject, gender = Gender)
+
+hcpya <- readr::read_csv(here::here("data/RESTRICTED_martin_2_5_2024_10_18_28.csv")) |>
+  select(sub = Subject, age = Age_in_Yrs) |>
+  left_join(hcpya_un, by = join_by(sub)) |>
+  mutate(sub = as.character(sub))
+```
+
+
+```{r hcpya_plot}
+hcpya |>
+  ggplot(aes(x = age, y = gender)) +
+  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
+  ggdist::stat_dotsinterval(
+    side = "bottom",
+    scale = 0.7,
+    slab_linewidth = NA,
+    quantiles = 100
+  )
+```
+
+
+```{r hcpya_table}
+hcpya_N <- count(hcpya) |>
+  mutate(name = "N")
+
+hcpya_age <- hcpya |>
+  summarise(
+    n = mean(age, na.rm = TRUE) |> round(digits = 2),
+    parens = sd(age, na.rm = TRUE) |> round(digits = 2)
+  ) |>
+  mutate(name = "age")
+
+hcpya_female <- count(hcpya, gender) |>
+  mutate(parens = n / sum(n)) |>
+  filter(gender == "F") |>
+  mutate(name = "sex") |>
+  select(-gender)
+
+bind_rows(hcpya_N, hcpya_age, hcpya_female) |>
+  select(name, n, `sd,%` = parens) |>
+  gt::gt() |>
+  gt::fmt_number()
+```
+
+
+# SpaceTop
+
+```{r spacetop_load}
+spacetop <- readr::read_tsv(here::here("data/participants.tsv"), col_select = c(-group)) |>
+  rename(sub = participant_id) |>
+  mutate(
+    sex = case_match(
+      sex,
+      "M" ~ "Male",
+      "F" ~ "Female"
+    )
+  ) |>
+  mutate(sub = as.character(sub))
+```
+
+```{r spacetop_plot}
+spacetop |>
+  ggplot(aes(x = age, y = sex)) +
+  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
+  ggdist::stat_dotsinterval(
+    side = "bottom",
+    scale = 0.7,
+    slab_linewidth = NA,
+    quantiles = 100
+  )
+```
+
+
+
+```{r spacetop_table}
+spacetop_N <- count(spacetop) |>
+  mutate(name = "N")
+
+spacetop_age <- spacetop |>
+  summarise(
+    n = mean(age, na.rm = TRUE) |> round(digits = 2),
+    parens = sd(age, na.rm = TRUE) |> round(digits = 2)
+  ) |>
+  mutate(name = "age")
+
+spacetop_female <- count(spacetop, sex) |>
+  mutate(parens = n / sum(n)) |>
+  filter(forcats::fct_match(sex, "Female")) |>
+  mutate(name = "sex") |>
+  select(-sex)
+
+bind_rows(spacetop_N, spacetop_age, spacetop_female) |>
+  select(name, n, `sd,%` = parens) |>
+  gt::gt() |>
+  gt::fmt_number()
+```
+
+# HCP-Aging
+
+```{r}
+hcp_aging_header <- readr::read_tsv(here::here("data/ndar_subject01_hcpaging.txt"), n_max = 1)
+
+hcp_aging <- readr::read_tsv(here::here("data/ndar_subject01_hcpaging.txt"), skip = 2, col_names = colnames(hcp_aging_header)) |>
+  select(sub = src_subject_id, age = interview_age) |>
+  mutate(
+    age = age / 12,
+    sub = stringr::str_remove(sub, "HCA") |> as.integer() |> as.character()
+  )
+```
+
+
+# HCP-Dec
+
+```{r}
+hcp_dev_header <- readr::read_tsv(here::here("data/ndar_subject01_hcpdev.txt"), n_max = 1)
+
+hcp_dev <- readr::read_tsv(here::here("data/ndar_subject01_hcpdev.txt"), skip = 2, col_names = colnames(hcp_aging_header)) |>
+  select(sub = src_subject_id, age = interview_age) |>
+  mutate(age = age / 12) |>
+  mutate(sub = stringr::str_remove(sub, "HCD") |> as.integer() |> as.character())
+```
+
+
+# All
+
+```{r all_plot}
+all_demos <- bind_rows(
+  list(
+    abcd = abcd,
+    ukb = ukb,
+    hcpya = hcpya,
+    spacetop = spacetop,
+    hcp_aging = hcp_aging,
+    hcp_dev = hcp_dev
+  ),
+  .id = "dataset"
+)
+
+
+all_demos |>
+  ggplot(aes(x = age, y = dataset)) +
+  ggdist::stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7) +
+  ggdist::stat_dotsinterval(
+    side = "bottom",
+    scale = 0.7,
+    slab_linewidth = NA,
+    quantiles = 100
+  )
+```
+

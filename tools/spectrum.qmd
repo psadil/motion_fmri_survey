@@ -1,0 +1,279 @@
+---
+title: "spectrum"
+format: 
+  html:
+    page-layout: full
+execute:
+  cache: true
+  echo: false
+  warning: false
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+.clean <- function(.data, N=20){
+  .data |>
+    semi_join(count(.data, freq) |> filter(n>N))
+}
+
+```
+
+
+
+```{r hcpa}
+#| fig-height: 8
+#| fig-width: 8
+targets::tar_read(hcpa_spectrum) |>
+  ggplot(aes(y=avg, x=freq)) +
+  geom_raster(aes(fill=pxx)) +
+  scale_fill_viridis_c(option="turbo") +
+  facet_grid(task+ped~param) +
+  ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank()
+  ) +
+  ggtitle("HCPA")
+
+```
+
+
+```{r hcpd}
+#| fig-height: 8
+#| fig-width: 8
+targets::tar_read(hcpa_spectrum) |>
+  ggplot(aes(y=avg, x=freq)) +
+  geom_raster(aes(fill=pxx)) +
+  scale_fill_viridis_c(option="turbo") +
+  facet_grid(task+ped~param) +
+  ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank()
+  ) +
+  ggtitle("HCPD")
+
+```
+
+
+```{r hcpyalr}
+#| fig-height: 8
+#| fig-width: 8
+
+targets::tar_read(hcpya_spectrum) |>
+  filter(ped=="LR") |>
+  filter(stringr::str_detect(task, "REST", TRUE)) |>
+  bind_rows(
+    targets::tar_read(hcpya_spectrum) |>
+      filter(ped=="LR") |>
+      filter(stringr::str_detect(task, "REST")) |>
+      .clean()
+  ) |>
+  ggplot(aes(y=avg, x=freq)) +
+  geom_raster(aes(fill=pxx)) +
+  scale_fill_viridis_c(option="turbo") +
+  facet_grid(task~param) +
+  ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank()
+  ) +
+  ggtitle("HCPYA (LR)")
+```
+
+
+```{r}
+#| eval: false
+#| include: false
+#| fig-height: 8
+#| fig-width: 8
+targets::tar_read(abcd_spectrum)  |>
+  filter(stringr::str_detect(param, "trans")) |>
+  mutate(
+    ses = factor(
+      ses,
+      levels = c(
+        "baselineYear1Arm1", 
+        "2YearFollowUpYArm1", 
+        "4YearFollowUpYArm1"
+      ),
+      ordered = TRUE
+    ),
+    ses=forcats::fct_recode(
+      ses,
+      baseline="baselineYear1Arm1",
+      Year2="2YearFollowUpYArm1",
+      Year4="4YearFollowUpYArm1"
+    ) |>
+      forcats::fct_relevel("Year2", after=Inf) |>
+      forcats::fct_relevel("Year4", after=Inf)
+  ) |>
+  ggplot(aes(y=avg, x=freq)) +
+  geom_raster(aes(fill=pxx)) +
+  scale_fill_viridis_c(option="turbo") +
+  facet_grid(ses~task+run+param, scales = "free_y") +
+  ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank()
+  ) +
+  ggtitle("ABCD")
+```
+
+## UKB
+
+```{r}
+#| eval: false
+#| include: false
+
+ukb <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/ukb_spectrum.parquet") |>
+  left_join(filter(by_run, dataset=="ukb")) |>
+  filter(ses==2) |>
+  filter(!is.na(avg)) |>
+  rescale(task, sub, ses)
+
+```
+
+
+```{r}
+#| eval: false
+#| include: false
+
+ukb |>
+  group_nest(sub, task) |>
+  slice_sample(n=300, by = task) |>
+  tidyr::unnest(data) |>
+  ggplot(aes(y=avg, x=freq)) +
+  geom_raster(aes(fill=pxx)) +
+  scale_fill_viridis_c(option="turbo") +
+  facet_wrap(~task, scales = "free_y") +
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank()
+  )
+
+```
+
+
+## SpaceTop
+
+```{r}
+#| eval: false
+#| include: false
+
+spacetop <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/spacetop_spectrum.parquet") |>
+  left_join(filter(by_run, dataset=="spacetop")) |>
+  filter(!is.na(avg)) |>
+  rescale(task, sub, ses, run)
+
+```
+
+
+```{r}
+#| eval: false
+#| include: false
+spacetop |>
+  filter(task=="social", run=="4", ses=="01") |>
+  ggplot(aes(y=avg, x=freq)) +
+  geom_raster(aes(fill=pxx)) +
+  scale_fill_viridis_c(option="turbo") +
+  facet_grid(task~ses+run, scales = "free_y") +
+  theme(
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank()
+  )
+
+```
+
+## Notch Filter Parameters
+
+```{r, peaks}
+#| eval: false
+hcpa <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/hcpa_spectrum.parquet") |>
+  filter(between(freq, 0.2, 0.6), param=="trans_y") |>
+  slice_max(order_by = pxx, n=1, by=c(sub, ses, task, ped)) |>
+  summarise(
+    freq = median(freq),
+    .by = c(sub, task, param)
+  ) |>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task)
+  ) 
+hcpd <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/hcpd_spectrum.parquet") |>
+  filter(between(freq, 0.2, 0.6), param=="trans_y") |>
+  slice_max(order_by = pxx, n=1, by=c(sub, ses, task, ped)) |>
+  summarise(
+    freq = median(freq),
+    .by = c(sub, task)
+  ) |>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task)
+  ) 
+hcpya <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/hcpya_spectrum.parquet") |>
+  filter(between(freq, 0.2, 0.6), param=="trans_x") |>
+  slice_max(order_by = pxx, n=1, by=c(sub, ses, task, ped)) |>
+  summarise(
+    freq = median(freq),
+    .by = c(sub, task)
+  ) |>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task)
+  ) 
+
+abcd <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/abcd_spectrum.parquet") |>
+  filter(between(freq, 0.2, 0.6), param=="trans_y") |>
+  slice_max(order_by = pxx, n=1, by=c(sub, ses, task))|>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task, ses)
+  ) 
+
+ukb <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/ukb_spectrum.parquet") |>
+  filter(between(freq, 0.2, 0.6), param=="trans_y") |>
+  slice_max(order_by = pxx, n=1, by=c(sub, ses, task)) |>
+  summarise(
+    freq = median(freq),
+    .by = c(sub, task)
+  ) |>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task)
+  ) 
+
+spacetop <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/spacetop_spectrum.parquet") |>
+  filter(between(freq, 0.2, 0.6), param=="trans_y") |>
+  slice_max(order_by = pxx, n=1, by=c(sub, ses, task, run)) |>
+  summarise(
+    freq = median(freq),
+    .by = c(sub, task)
+  ) |>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task)
+  ) 
+
+dplyr::bind_rows(
+  list(
+    abcd=abcd, 
+    hcpa=hcpa, 
+    hcpd=hcpd, 
+    hcpya=hcpya, 
+    ukb=ukb, 
+    spacetop=spacetop
+  ), 
+  .id="dataset") |>
+  DT::datatable(filter = "top")
+
+```
+
