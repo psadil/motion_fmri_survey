@@ -17,8 +17,16 @@ targets::tar_option_set(
 
 
 list(
-  tar_target(ukb_source, "data/motion/derivatives/ukb.parquet", format = "file"),
-  tar_target(ukb_exclusion_src, "data/exclusion/ukb_exclusion.tsv", format = "file"),
+  tar_target(
+    ukb_source,
+    "data/motion/derivatives/ukb.parquet",
+    format = "file"
+  ),
+  tar_target(
+    ukb_exclusion_src,
+    "data/exclusion/ukb_exclusion.tsv",
+    format = "file"
+  ),
   tar_target(
     ukb_exclusion,
     get_ukb_exclusion(ukb_exclusion_src),
@@ -27,7 +35,7 @@ list(
   tar_target(ukb, get_ukb(ukb_source, ukb_exclusion)),
   tar_target(ukb_beh, "data/ukb677207_bulk.parquet", format = "file"),
   tar_target(ukb_design_mat, "data/ukb/design.mat", format = "file"),
-  # tar_target(ukb_events, get_ukb_design(ukb_design_mat)),
+  tar_target(ukb_events, get_ukb_design(ukb_design_mat)),
   tar_target(ukb_eprime, "data/1000513_25748_2_0.txt", format = "file"),
   tar_target(ukb_responses, get_ukb_responses(ukb_eprime)),
   tar_target(
@@ -61,7 +69,7 @@ list(
     get_hcp(hcpya_source, hcpya_exclusion),
     deployment = "main"
   ),
-  # tar_target(hcpya_events, get_hcpya_events("data/hcp_evs")),
+  tar_target(hcpya_events, get_hcpya_events("data/hcp_evs", hcpya)),
   tar_target(
     hcpa_source,
     "data/motion/derivatives/HCPAgingRec.parquet",
@@ -86,8 +94,11 @@ list(
     "data/motion/derivatives/abcd.parquet",
     format = "file"
   ),
-  tar_target(abcd_exclusion, get_abcd_exclusion(abcd_source, abcd_demographics)),
-  # tar_target(abcd_events, get_abcd_events()),
+  tar_target(
+    abcd_exclusion,
+    get_abcd_exclusion(abcd_source, abcd_demographics)
+  ),
+  tar_target(abcd_events, get_abcd_events()),
   tar_target(abcd, get_abcd(abcd_source, abcd_exclusion)),
   tarchetypes::tar_group_by(
     datasets,
@@ -200,7 +211,9 @@ list(
   tarchetypes::tar_group_by(
     qc_fd_hcpya_iter,
     dplyr::group_nest(qc_fd_hcpya, iter, sub, filtered),
-    iter, sub, filtered,
+    iter,
+    sub,
+    filtered,
     deployment = "main"
   ),
   tar_target(cleaned, c(TRUE, FALSE), format = "qs", deployment = "main"),

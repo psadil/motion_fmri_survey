@@ -1,2 +1,3 @@
-data
-tools
+data/*
+figures/*
+_targets/*

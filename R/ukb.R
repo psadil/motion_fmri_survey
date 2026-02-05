@@ -44,7 +44,9 @@ get_ukb_design <- function(mat) {
   #     values_to = "onset",
   #     names_to = "Block")
   #
-  readr::read_tsv("https://git.fmrib.ox.ac.uk/falmagro/UK_biobank_pipeline_v_1/-/raw/master/bb_data/task-hariri_events.tsv?inline=false") |>
+  readr::read_tsv(
+    "https://git.fmrib.ox.ac.uk/falmagro/UK_biobank_pipeline_v_1/-/raw/master/bb_data/task-hariri_events.tsv?inline=false"
+  ) |>
     dplyr::select(onset, duration, type = Stimulus)
 }
 
@@ -57,7 +59,12 @@ get_ukb_responses <- function(src = "data/1000513_25748_2_0.txt") {
     rprime::to_data_frame() |>
     tibble::as_tibble() |>
     dplyr::filter(Running == "SessionSelectionList") |>
-    dplyr::select(Procedure, Sample, RunTrialNumber, starts_with("Experimenter")) |>
+    dplyr::select(
+      Procedure,
+      Sample,
+      RunTrialNumber,
+      starts_with("Experimenter")
+    ) |>
     dplyr::mutate(
       onset = as.numeric(ExperimenterWindow.OnsetTime),
       onset = onset - min(onset, na.rm = TRUE),
@@ -68,7 +75,10 @@ get_ukb_responses <- function(src = "data/1000513_25748_2_0.txt") {
 }
 
 get_ukb_demographics <- function() {
-  subses <- arrow::open_dataset(here::here("data/dvars/dataset=ukb"), format = "ipc") |>
+  subses <- arrow::open_dataset(
+    here::here("data/dvars/dataset=ukb"),
+    format = "ipc"
+  ) |>
     dplyr::distinct(sub, ses) |>
     dplyr::collect() |>
     dplyr::mutate(ses = as.character(ses))
@@ -111,8 +121,12 @@ get_ukb_demographics <- function() {
       bmi_3 = f.21001.3.0
     ) |>
     dplyr::rename(ethnicity = f.21000.0.0) |>
-    dplyr::mutate(ethnicity = dplyr::if_else(is.na(ethnicity), f.21000.1.0, ethnicity)) |>
-    dplyr::mutate(ethnicity = dplyr::if_else(is.na(ethnicity), f.21000.2.0, ethnicity)) |>
+    dplyr::mutate(
+      ethnicity = dplyr::if_else(is.na(ethnicity), f.21000.1.0, ethnicity)
+    ) |>
+    dplyr::mutate(
+      ethnicity = dplyr::if_else(is.na(ethnicity), f.21000.2.0, ethnicity)
+    ) |>
     dplyr::select(-tidyselect::starts_with("f.21000")) |>
     dplyr::collect() |>
     tidyr::pivot_longer(

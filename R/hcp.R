@@ -25,15 +25,25 @@ get_hcp <- function(src, exclusion = NULL) {
 
   if (stringr::str_detect(src, "openaccess")) {
     out <- readr::read_csv(
-      fs::dir_ls(here::here("data/sessionSummaryCSV_1200Release"), glob = "*csv"),
+      fs::dir_ls(
+        here::here("data/sessionSummaryCSV_1200Release"),
+        glob = "*csv"
+      ),
       id = "sub",
       show_col_types = FALSE
     ) |>
       dplyr::filter(stringr::str_detect(`Scan Type`, "fMRI$")) |>
-      dplyr::filter(stringr::str_detect(`Scan Description`, "MOVIE|RET", TRUE)) |>
+      dplyr::filter(stringr::str_detect(
+        `Scan Description`,
+        "MOVIE|RET",
+        TRUE
+      )) |>
       dplyr::mutate(
         sub = stringr::str_extract(sub, "[[:digit:]]{6}"),
-        task = stringr::str_extract(`Scan Description`, "WM|REST|LANGUAGE|SOCIAL|GAMBLING|EMOTION|MOTOR|RELATIONAL") |>
+        task = stringr::str_extract(
+          `Scan Description`,
+          "WM|REST|LANGUAGE|SOCIAL|GAMBLING|EMOTION|MOTOR|RELATIONAL"
+        ) |>
           stringr::str_to_lower(),
         run = dplyr::case_when(
           stringr::str_detect(`Scan Description`, "REST1") ~ 1L,
@@ -61,7 +71,45 @@ get_hcp <- function(src, exclusion = NULL) {
         !(sub == 196952 & task == "wm"),
         !(sub == 748662 & task == "social"),
         !(sub == 809252 & task == "social"),
-        !(sub %in% c(103010, 113417, 116423, 120010, 121719, 127226, 130114, 143830, 169040, 185038, 189652, 202820, 204218, 329844, 385046, 401422, 462139, 469961, 644246, 688569, 723141, 908860, 908860, 969476, 971160, 168139, 144428, 168139, 186545, 192237, 223929, 320826, 644044, 822244, 870861, 947668))
+        !(sub %in%
+          c(
+            103010,
+            113417,
+            116423,
+            120010,
+            121719,
+            127226,
+            130114,
+            143830,
+            169040,
+            185038,
+            189652,
+            202820,
+            204218,
+            329844,
+            385046,
+            401422,
+            462139,
+            469961,
+            644246,
+            688569,
+            723141,
+            908860,
+            908860,
+            969476,
+            971160,
+            168139,
+            144428,
+            168139,
+            186545,
+            192237,
+            223929,
+            320826,
+            644044,
+            822244,
+            870861,
+            947668
+          ))
       ) |>
       dplyr::mutate(ses = "1")
     # https://wiki.humanconnectome.org/docs/HCP%20Data%20Release%20Updates%20Known%20Issues%20and%20Planned%20fixes.html
@@ -97,13 +145,19 @@ get_hcpad_ses <- function(srcs) {
     show_col_types = FALSE
   ) |>
     dplyr::filter(stringr::str_detect(`Scan Type`, "fMRI$")) |>
-    dplyr::filter(!(is.na(`Percent Complete`) & stringr::str_detect(`Series Description`, "REST"))) |>
+    dplyr::filter(
+      !(is.na(`Percent Complete`) &
+        stringr::str_detect(`Series Description`, "REST"))
+    ) |>
     dplyr::filter(!(is.na(CDB_Description))) |>
     dplyr::mutate(
       sub = stringr::str_extract(sub, "[[:digit:]]{6,7}") |>
         as.integer() |>
         as.character(),
-      task = stringr::str_extract(CDB_Description, "REST1a|REST1b|REST2a|REST2b|REST|VISMOTOR|CARIT|FACENAME|EMOTION|GUESSING") |>
+      task = stringr::str_extract(
+        CDB_Description,
+        "REST1a|REST1b|REST2a|REST2b|REST|VISMOTOR|CARIT|FACENAME|EMOTION|GUESSING"
+      ) |>
         stringr::str_to_lower(),
       task = dplyr::case_when(
         task == "rest1a" ~ "resta",
@@ -134,7 +188,6 @@ get_hcpad_ses <- function(srcs) {
     ) |>
     dplyr::select(sub, task, run, ped, ses = `Session Day`, scan)
 }
-
 
 
 get_hcp_design0 <- function(src) {
@@ -168,7 +221,15 @@ get_hcp_design0 <- function(src) {
         "MOTOR|SOCIAL|EMOTION|WM|RELATIONAL|GAMBLING|LANGUAGE"
       ) |>
         factor(
-          levels = c("WM", "GAMBLING", "MOTOR", "LANGUAGE", "SOCIAL", "RELATIONAL", "EMOTION"),
+          levels = c(
+            "WM",
+            "GAMBLING",
+            "MOTOR",
+            "LANGUAGE",
+            "SOCIAL",
+            "RELATIONAL",
+            "EMOTION"
+          ),
           ordered = TRUE
         ),
       ped = stringr::str_extract(path, "RL|LR") |> as.factor(),
@@ -177,7 +238,7 @@ get_hcp_design0 <- function(src) {
     dplyr::mutate(sub = stringr::str_extract(path, "[[:digit:]]{6}"))
 }
 
-get_hcpya_events <- function(src) {
+get_hcpya_events <- function(src, hcpya) {
   hcp_design <- get_hcp_design0(src)
 
   wm_hcp_design <- hcp_design |>
@@ -259,9 +320,10 @@ get_hcpya_events <- function(src) {
       .by = c(event, task, ped, type)
     )
 
-
   hcp_design |>
-    dplyr::filter(!task %in% c("WM", "GAMBLING", "SOCIAL", "LANGUAGE", "RELATIONAL")) |>
+    dplyr::filter(
+      !task %in% c("WM", "GAMBLING", "SOCIAL", "LANGUAGE", "RELATIONAL")
+    ) |>
     dplyr::mutate(
       type = dplyr::case_when(
         type == "neut" ~ "shapes",
@@ -275,7 +337,22 @@ get_hcpya_events <- function(src) {
       duration = mean(duration),
       .by = c(event, task, ped, type)
     ) |>
-    dplyr::bind_rows(wm_hcp_design, gambling_hcp_design, social_hcp_stim, rel_hcp_stim, lang_hcp_stim)
+    dplyr::bind_rows(
+      wm_hcp_design,
+      gambling_hcp_design,
+      social_hcp_stim,
+      rel_hcp_stim,
+      lang_hcp_stim
+    ) |>
+    dplyr::mutate(
+      task = stringr::str_to_lower(task)
+    ) |> 
+    dplyr::left_join(
+      dplyr::count(hcpya, task, scan, ped) |> 
+        dplyr::slice_max(order_by = n, n = 1, by = c(task, scan)) |>
+        dplyr::select(-n),
+      by = dplyr::join_by(task, ped)) |>
+    dplyr::mutate(scan = factor(scan, ordered = TRUE))
 }
 
 get_exclude_hcp <- function(path) {
@@ -288,11 +365,19 @@ get_exclude_hcp <- function(path) {
 }
 
 get_hcpya_demographics <- function() {
-  hcpya_un <- readr::read_csv(here::here("data/unrestricted_martin_2_5_2024_10_18_12.csv")) |>
+  hcpya_un <- readr::read_csv(here::here(
+    "data/unrestricted_martin_2_5_2024_10_18_12.csv"
+  )) |>
     dplyr::select(sub = Subject, gender = Gender)
 
   readr::read_csv(here::here("data/RESTRICTED_martin_2_5_2024_10_18_28.csv")) |>
-    dplyr::select(sub = Subject, age = Age_in_Yrs, race = Race, ethnicity = Ethnicity, bmi = BMI) |>
+    dplyr::select(
+      sub = Subject,
+      age = Age_in_Yrs,
+      race = Race,
+      ethnicity = Ethnicity,
+      bmi = BMI
+    ) |>
     dplyr::left_join(hcpya_un, by = dplyr::join_by(sub)) |>
     dplyr::mutate(sub = as.character(sub))
 }
@@ -328,8 +413,12 @@ get_hcp_aging_demographics <- function() {
 }
 
 get_hcp_dev_demographics <- function() {
-  vitals <- get_bmi_from_vitals("data/demographics/HCPDevelopmentRec_vitals01.txt")
-  read_nda(here::here("data/demographics/HCPDevelopmentRec_ndar_subject01.txt")) |>
+  vitals <- get_bmi_from_vitals(
+    "data/demographics/HCPDevelopmentRec_vitals01.txt"
+  )
+  read_nda(here::here(
+    "data/demographics/HCPDevelopmentRec_ndar_subject01.txt"
+  )) |>
     dplyr::select(
       sub = src_subject_id,
       age = interview_age,
@@ -350,7 +439,12 @@ get_hcpya_exclusion <- function(src) {
     dplyr::summarise(n_tr = max(t), .by = c(sub, task, ped)) |>
     dplyr::count(n_tr, task, ped) |>
     dplyr::collect() |>
-    dplyr::slice_max(order_by = n, n = 1, with_ties = FALSE, by = c(task, ped)) |>
+    dplyr::slice_max(
+      order_by = n,
+      n = 1,
+      with_ties = FALSE,
+      by = c(task, ped)
+    ) |>
     dplyr::select(-n)
 
   arrow::open_dataset(src) |>
@@ -365,6 +459,22 @@ get_hcpd_exclusion <- function(src = "data/exclusion/hcp_dev.csv") {
     dplyr::mutate(
       task = stringr::str_to_lower(task),
       sub = stringr::str_remove(sub, "HCD") |>
-        as.integer() |> as.character()
+        as.integer() |>
+        as.character()
     )
 }
+
+
+get_hcpya_events2 <- function(events, hcpya){
+  
+  events |>
+    dplyr::mutate(
+      task = stringr::str_to_lower(task)
+    ) |> 
+    dplyr::left_join(
+      dplyr::count(hcpya, task, scan, ped) |> 
+        dplyr::slice_max(order_by = n, n = 1, by = c(task, scan)) |>
+        dplyr::select(-n),
+      by = dplyr::join_by(task, ped))
+}
+

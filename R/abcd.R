@@ -22,7 +22,9 @@ get_abcd <- function(sources, abcd_exclusion) {
     do_casting()
 }
 
-get_abcd_events <- function(abcd_design = "/Users/psadil/data/events/derivatives/abcd.parquet") {
+get_abcd_events <- function(
+  abcd_design = "/Users/psadil/data/events/derivatives/abcd.parquet"
+) {
   events <- arrow::open_dataset(abcd_design)
 
   cue_design <- events |>
@@ -59,7 +61,6 @@ get_abcd_events <- function(abcd_design = "/Users/psadil/data/events/derivatives
 
   nback <- dplyr::bind_rows(cue_design, nback_design)
 
-
   # SST timing varies by performance
 
   # sst <- events |>
@@ -77,7 +78,6 @@ get_abcd_events <- function(abcd_design = "/Users/psadil/data/events/derivatives
   #     .by = c(event, task)
   #   ) |>
   #   dplyr::mutate(type = "go/nogo")
-
 
   mid_antic <- events |>
     dplyr::filter(stringr::str_detect(trial_type, "antic")) |>
@@ -123,7 +123,8 @@ get_abcds_with_scanner <- function(.data) {
     dplyr::mutate(
       anyna = purrr::map_lgl(
         data,
-        ~ any(is.na(.x$deviceserialnumber)) && !all(is.na(.x$deviceserialnumber))
+        ~ any(is.na(.x$deviceserialnumber)) &&
+          !all(is.na(.x$deviceserialnumber))
       )
     ) |>
     dplyr::filter(anyna) |>
@@ -203,7 +204,11 @@ get_abcd_demographics <- function(source) {
     dplyr::select(sub, ses, sex) |>
     tidyr::pivot_wider(names_from = ses, values_from = sex) |>
     dplyr::mutate(
-      sex = dplyr::if_else(is.na(baselineYear1Arm1), `1_year_follow_up_y_arm_1`, baselineYear1Arm1),
+      sex = dplyr::if_else(
+        is.na(baselineYear1Arm1),
+        `1_year_follow_up_y_arm_1`,
+        baselineYear1Arm1
+      ),
       sex = dplyr::if_else(is.na(sex), `2YearFollowUpYArm1`, sex),
       sex = dplyr::if_else(is.na(sex), `3_year_follow_up_y_arm_1`, sex),
       sex = dplyr::if_else(is.na(sex), `4YearFollowUpYArm1`, sex),
@@ -216,7 +221,6 @@ get_abcd_demographics <- function(source) {
     ) |>
     dplyr::filter(!is.na(sex)) |>
     dplyr::select(sub, sex)
-
 
   bmi <- readr::read_csv("data/ph_y_anthro.csv") |>
     dplyr::rename(sub = src_subject_id, ses = eventname) |>
@@ -242,7 +246,10 @@ get_abcd_demographics <- function(source) {
   dplyr::full_join(main, bmi, by = dplyr::join_by(sub, ses)) |>
     dplyr::full_join(sex, by = dplyr::join_by(sub)) |>
     dplyr::full_join(age, by = dplyr::join_by(sub, ses)) |>
-    dplyr::filter(ses %in% c("baselineYear1Arm1", "2YearFollowUpYArm1", "4YearFollowUpYArm1")) |>
+    dplyr::filter(
+      ses %in%
+        c("baselineYear1Arm1", "2YearFollowUpYArm1", "4YearFollowUpYArm1")
+    ) |>
     dplyr::mutate(
       age = dplyr::if_else(is.na(age.y), age.x, age.y),
       sex = dplyr::if_else(is.na(sex.y), sex.x, sex.y),
@@ -257,55 +264,96 @@ get_abcd_excl_rest <- function() {
   srcs <- here::here("data", "abcd_tabular", "imaging")
   rsfMRI_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_rsfmr.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_rsfmri_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_rsfmri_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_rsfmri_ok_ser > 0))
 
   T1_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_smr_t1.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_t1_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_t1_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_t1_ok_ser > 0))
 
   fMRI_B0_unwarp_available <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_bounwarp_flag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_bounwarp_flag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_bounwarp_flag == 1))
 
   FreeSurfer_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_fsurf.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc")
+    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc"),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fsqc_qc == 0)
 
   fMRI_manual_post_processing_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_post_fmr.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fmri_postqc_qc")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "fmri_postqc_qc"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fmri_postqc_qc == 0)
 
   fMRI_registration_to_T1w <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_regt1_rigid")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_regt1_rigid"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_regt1_rigid < 19))
 
   fMRI_dorsal_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_dorsal")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_dorsal"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_dorsal < 65))
 
   fMRI_ventral_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_ventral")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_ventral"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_ventral < 60))
 
   Derived_results_exist <- readr::read_csv(
     fs::path(srcs, "mri_y_rsfmr_cor_gp_gp.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "rsfmri_c_ngd_dt_ngd_sa")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "rsfmri_c_ngd_dt_ngd_sa"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(is.na(rsfmri_c_ngd_dt_ngd_sa))
 
@@ -335,67 +383,121 @@ get_abcd_excl_mid <- function() {
   srcs <- here::here("data", "abcd_tabular", "imaging")
   MID_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_mid.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_mid_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_mid_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_mid_ok_ser > 0))
 
   T1_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_smr_t1.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_t1_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_t1_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_t1_ok_ser > 0))
 
   MID_behavior_passed <- readr::read_csv(
     fs::path(srcs, "mri_y_tfmr_mid_beh.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "tfmri_mid_beh_performflag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "tfmri_mid_beh_performflag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(tfmri_mid_beh_performflag == 1))
 
   MID_E_prime_timing_match_OR_ignore_E_prime_mismatch <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_mid.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_mid_ep_t_series_match", "eprime_mismatch_ok_mid")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_mid_ep_t_series_match",
+      "eprime_mismatch_ok_mid"
+    ),
+    show_col_types = FALSE
   ) |>
-    dplyr::filter(!(iqc_mid_ep_t_series_match == 1 | eprime_mismatch_ok_mid == 1))
+    dplyr::filter(
+      !(iqc_mid_ep_t_series_match == 1 | eprime_mismatch_ok_mid == 1)
+    )
 
   fMRI_B0_unwarp_available <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_bounwarp_flag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_bounwarp_flag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_bounwarp_flag == 1))
 
   FreeSurfer_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_fsurf.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc")
+    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc"),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fsqc_qc == 0)
 
   fMRI_manual_post_processing_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_post_fmr.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fmri_postqc_qc")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "fmri_postqc_qc"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fmri_postqc_qc == 0)
 
   fMRI_registration_to_T1w <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_regt1_rigid")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_regt1_rigid"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_regt1_rigid < 19))
 
   fMRI_dorsal_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_dorsal")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_dorsal"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_dorsal < 65))
 
   fMRI_ventral_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_ventral")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_ventral"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_ventral < 60))
 
   Derived_results_exist <- readr::read_csv(
     fs::path(srcs, "mri_y_tfmr_mid_arvn_aseg.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "tfmri_ma_acdn_b_scs_cbwmlh")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "tfmri_ma_acdn_b_scs_cbwmlh"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(is.na(tfmri_ma_acdn_b_scs_cbwmlh))
 
@@ -421,78 +523,137 @@ get_abcd_excl_mid <- function() {
 }
 
 get_abcd_excl_sst <- function() {
-  # https://wiki.abcdstudy.org/release-notes/imaging/quality-control.html#rs-fmri-data-recommended-for-inclusion
+  # https://docs.abcdstudy.org/latest/documentation/imaging/type_qc.html#sst-task-fmri-data-recommended-for-inclusion
   # everything except censoring
   srcs <- here::here("data", "abcd_tabular", "imaging")
   SST_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_sst.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_sst_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_sst_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_sst_ok_ser > 0))
 
   T1_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_smr_t1.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_t1_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_t1_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_t1_ok_ser > 0))
 
   SST_behavior_passed <- readr::read_csv(
     fs::path(srcs, "mri_y_tfmr_mid_beh.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "tfmri_mid_beh_performflag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "tfmri_mid_beh_performflag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(tfmri_mid_beh_performflag == 1))
 
   SST_task_had_no_glitch <- readr::read_csv(
     fs::path(srcs, "mri_y_tfmr_sst_beh.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "tfmri_sst_beh_glitchflag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "tfmri_sst_beh_glitchflag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(tfmri_sst_beh_glitchflag == 0))
 
   fMRI_B0_unwarp_available <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_bounwarp_flag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_bounwarp_flag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_bounwarp_flag == 1))
 
   SST_E_prime_timing_match_OR_ignore_E_prime_mismatch <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_sst.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_sst_ep_t_series_match", "eprime_mismatch_ok_sst")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_sst_ep_t_series_match",
+      "eprime_mismatch_ok_sst"
+    ),
+    show_col_types = FALSE
   ) |>
-    dplyr::filter(!(iqc_sst_ep_t_series_match == 1 | eprime_mismatch_ok_sst == 1))
+    dplyr::filter(
+      !(iqc_sst_ep_t_series_match == 1 | eprime_mismatch_ok_sst == 1)
+    )
 
   FreeSurfer_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_fsurf.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc")
+    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc"),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fsqc_qc == 0)
 
   fMRI_manual_post_processing_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_post_fmr.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fmri_postqc_qc")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "fmri_postqc_qc"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fmri_postqc_qc == 0)
 
   fMRI_registration_to_T1w <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_regt1_rigid")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_regt1_rigid"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_regt1_rigid < 19))
 
   fMRI_dorsal_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_dorsal")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_dorsal"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_dorsal < 65))
 
   fMRI_ventral_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_ventral")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_ventral"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_ventral < 60))
 
   Derived_results_exist <- readr::read_csv(
     fs::path(srcs, "mri_y_tfmr_sst_cgvfx_aseg.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "tfmri_sacgvf_bscs_cbwmlh")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "tfmri_sacgvf_bscs_cbwmlh"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(is.na(tfmri_sacgvf_bscs_cbwmlh))
 
@@ -524,67 +685,121 @@ get_abcd_excl_nback <- function() {
   srcs <- here::here("data", "abcd_tabular", "imaging")
   nBack_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_nback.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_nback_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_nback_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_nback_ok_ser > 0))
 
   T1_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_smr_t1.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_t1_ok_ser")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_t1_ok_ser"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(iqc_t1_ok_ser > 0))
 
   nBack_behavior_passed <- readr::read_csv(
     fs::path(srcs, "mri_y_tfmr_nback_beh.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "tfmri_nback_beh_performflag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "tfmri_nback_beh_performflag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(tfmri_nback_beh_performflag == 1))
 
   nBack_E_prime_timing_match_OR_ignore_E_prime_mismatch <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_nback.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "iqc_nback_ep_t_series_match", "eprime_mismatch_ok_nback")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "iqc_nback_ep_t_series_match",
+      "eprime_mismatch_ok_nback"
+    ),
+    show_col_types = FALSE
   ) |>
-    dplyr::filter(!(iqc_nback_ep_t_series_match == 1 | eprime_mismatch_ok_nback == 1))
+    dplyr::filter(
+      !(iqc_nback_ep_t_series_match == 1 | eprime_mismatch_ok_nback == 1)
+    )
 
   fMRI_B0_unwarp_available <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_bounwarp_flag")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_bounwarp_flag"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_bounwarp_flag == 1))
 
   FreeSurfer_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_fsurf.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc")
+    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fsqc_qc"),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fsqc_qc == 0)
 
   fMRI_manual_post_processing_QC_not_failed <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_man_post_fmr.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "fmri_postqc_qc")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "fmri_postqc_qc"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(fmri_postqc_qc == 0)
 
   fMRI_registration_to_T1w <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_regt1_rigid")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_regt1_rigid"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_regt1_rigid < 19))
 
   fMRI_dorsal_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_dorsal")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_dorsal"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_dorsal < 65))
 
   fMRI_ventral_cutoff_score <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_auto_post.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "apqc_fmri_fov_cutoff_ventral")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "apqc_fmri_fov_cutoff_ventral"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(!(apqc_fmri_fov_cutoff_ventral < 60))
 
   Derived_results_exist <- readr::read_csv(
     fs::path(srcs, "mri_y_tfmr_nback_0b_aseg.csv"),
-    col_select = c("sub" = "src_subject_id", "ses" = "eventname", "tfmri_nback_all_4")
+    col_select = c(
+      "sub" = "src_subject_id",
+      "ses" = "eventname",
+      "tfmri_nback_all_4"
+    ),
+    show_col_types = FALSE
   ) |>
     dplyr::filter(is.na(tfmri_nback_all_4))
 
@@ -613,15 +828,15 @@ get_abcd_too_short <- function(sources) {
   # can't go by max n_tr. Need to go by most common
   expected <- arrow::open_dataset(sources) |>
     dplyr::summarise(n_tr = max(t), .by = c(sub, task, ses, run)) |>
-    dplyr::count(n_tr, task, ses, run) |>
+    dplyr::count(n_tr, task) |>
     dplyr::collect() |>
-    dplyr::slice_max(order_by = n, n = 1, with_ties = FALSE, by = c(task, ses, run)) |>
+    dplyr::filter(n >= 10) |> # can't do top alone. There appears to be 3 most common
     dplyr::select(-n)
 
   arrow::open_dataset(sources) |>
     dplyr::summarise(n_tr = max(t), .by = c(sub, task, ses, run)) |>
     dplyr::collect() |>
-    dplyr::anti_join(expected) |>
+    dplyr::anti_join(expected, by = dplyr::join_by(n_tr)) |>
     dplyr::select(sub, task, ses, run) |>
     dplyr::collect()
 }
@@ -657,7 +872,11 @@ get_abcd_exclusion_demographics <- function(source, demographics) {
 
   dplyr::anti_join(
     abcd_subs,
-    dplyr::semi_join(abcd_subs, na.omit(dplyr::select(demographics, sub, ses, age, sex, bmi)), by = dplyr::join_by(sub, ses)),
+    dplyr::semi_join(
+      abcd_subs,
+      na.omit(dplyr::select(demographics, sub, ses, age, sex, bmi)),
+      by = dplyr::join_by(sub, ses)
+    ),
     by = dplyr::join_by(sub, ses)
   )
 }
@@ -697,7 +916,4 @@ get_abcd_exclusion <- function(source, demographics) {
       notes = stringr::str_c(notes, collapse = "|"),
       .by = c(sub, ses, task, run)
     )
-
-  # dplyr::bind_rows(too_short, runs) |>
-  #   dplyr::distinct()
 }

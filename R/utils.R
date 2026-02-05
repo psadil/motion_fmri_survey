@@ -3,12 +3,13 @@ deg_2_rad <- function(rad) {
 }
 
 get_demographics <- function(
-    ukb,
-    hcpya,
-    spacetop,
-    hcpdev,
-    hcpaging,
-    abcd) {
+  ukb,
+  hcpya,
+  spacetop,
+  hcpdev,
+  hcpaging,
+  abcd
+) {
   dplyr::bind_rows(
     list(
       UKB = ukb,
@@ -21,10 +22,23 @@ get_demographics <- function(
     .id = "dataset"
   ) |>
     dplyr::mutate(
-      scanner = dplyr::if_else(is.na(deviceserialnumber), site, deviceserialnumber)
+      scanner = dplyr::if_else(
+        is.na(deviceserialnumber),
+        site,
+        deviceserialnumber
+      )
     ) |>
     dplyr::select(
-      dataset, sub, sex, gender, age, race, ethnicity, scanner, ses, bmi
+      dataset,
+      sub,
+      sex,
+      gender,
+      age,
+      race,
+      ethnicity,
+      scanner,
+      ses,
+      bmi
     ) |>
     dplyr::mutate(
       dataset = factor(dataset),
@@ -60,7 +74,10 @@ get_demographics <- function(
       ses = factor(
         ses,
         levels = c(
-          "1", "2", "3", "4",
+          "1",
+          "2",
+          "3",
+          "4",
           "baselineYear1Arm1",
           "2YearFollowUpYArm1",
           "4YearFollowUpYArm1"
@@ -165,7 +182,10 @@ get_by_run <- function(hcpya, hcpa, hcpd, ukb, abcd) {
       ses = factor(
         ses,
         levels = c(
-          "1", "2", "3", "4",
+          "1",
+          "2",
+          "3",
+          "4",
           "baselineYear1Arm1",
           "2YearFollowUpYArm1",
           "4YearFollowUpYArm1"
@@ -194,11 +214,12 @@ get_by_run <- function(hcpya, hcpa, hcpd, ukb, abcd) {
 }
 
 get_lost_strict <- function(
-    dataset,
-    by_run,
-    prop_thresh = 0.2,
-    mfd_thresh = 0.25,
-    max_fd_thresh = 5) {
+  dataset,
+  by_run,
+  prop_thresh = 0.2,
+  mfd_thresh = 0.25,
+  max_fd_thresh = 5
+) {
   n_subs <- by_run |>
     dplyr::semi_join(dplyr::distinct(dataset, dataset)) |>
     dplyr::count(dataset, task, ses, scan, filtered, name = "n_sub")
@@ -236,16 +257,28 @@ get_lost_strict <- function(
   dplyr::bind_rows(by_max, by_avg, by_prop) |>
     dplyr::distinct() |>
     dplyr::count(dataset, task, ses, scan, filtered) |>
-    dplyr::right_join(n_subs, by = dplyr::join_by(dataset, task, ses, scan, filtered)) |>
+    dplyr::right_join(
+      n_subs,
+      by = dplyr::join_by(dataset, task, ses, scan, filtered)
+    ) |>
     dplyr::mutate(n = dplyr::if_else(is.na(n), 0, n)) |>
     dplyr::mutate(
       lost = n / n_sub,
       lower = qbeta(0.025, 1 / 2 + n, n_sub - n + 1 / 2),
       upper = qbeta(0.975, 1 / 2 + n, n_sub - n + 1 / 2)
     ) |>
-    dplyr::left_join(by_prop2, by = dplyr::join_by(dataset, task, ses, scan, filtered)) |>
-    dplyr::left_join(by_max2, by = dplyr::join_by(dataset, task, ses, scan, filtered)) |>
-    dplyr::left_join(by_avg2, by = dplyr::join_by(dataset, task, ses, scan, filtered))
+    dplyr::left_join(
+      by_prop2,
+      by = dplyr::join_by(dataset, task, ses, scan, filtered)
+    ) |>
+    dplyr::left_join(
+      by_max2,
+      by = dplyr::join_by(dataset, task, ses, scan, filtered)
+    ) |>
+    dplyr::left_join(
+      by_avg2,
+      by = dplyr::join_by(dataset, task, ses, scan, filtered)
+    )
 }
 
 
@@ -283,7 +316,10 @@ bind_datasets <- function(hcpya, hcpa, hcpd, ukb, abcd, spacetop) {
       ses = factor(
         ses,
         levels = c(
-          "1", "2", "3", "4",
+          "1",
+          "2",
+          "3",
+          "4",
           "baselineYear1Arm1",
           "2YearFollowUpYArm1",
           "4YearFollowUpYArm1"
@@ -300,7 +336,17 @@ bind_datasets <- function(hcpya, hcpa, hcpd, ukb, abcd, spacetop) {
         forcats::fct_relevel("Year4", after = Inf),
       scan = factor(scan, ordered = TRUE)
     ) |>
-    dplyr::select(dataset, sub, ses, task, scan, t, time, rmsd, tidyselect::contains("frame")) |>
+    dplyr::select(
+      dataset,
+      sub,
+      ses,
+      task,
+      scan,
+      t,
+      time,
+      rmsd,
+      tidyselect::contains("frame")
+    ) |>
     tidyr::pivot_longer(
       tidyselect::contains("frame"),
       names_to = "filtered",
@@ -316,7 +362,10 @@ bind_datasets <- function(datasets) {
       ses = factor(
         ses,
         levels = c(
-          "1", "2", "3", "4",
+          "1",
+          "2",
+          "3",
+          "4",
           "baselineYear1Arm1",
           "2YearFollowUpYArm1",
           "4YearFollowUpYArm1"
@@ -333,7 +382,16 @@ bind_datasets <- function(datasets) {
         forcats::fct_relevel("Year4", after = Inf),
       scan = factor(scan, ordered = TRUE)
     ) |>
-    dplyr::select(dataset, sub, ses, task, scan, t, time, tidyselect::contains("frame")) |>
+    dplyr::select(
+      dataset,
+      sub,
+      ses,
+      task,
+      scan,
+      t,
+      time,
+      tidyselect::contains("frame")
+    ) |>
     tidyr::pivot_longer(
       tidyselect::contains("frame"),
       names_to = "filtered",
@@ -346,4 +404,64 @@ bind_datasets <- function(datasets) {
 bind_lost <- function(strict, lenient) {
   dplyr::bind_rows(list(lenient = lenient, strict = strict), .id = "type") |>
     dplyr::select(-n, -n_sub)
+}
+
+
+GeomSplitViolin <- ggplot2::ggproto(
+  "GeomSplitViolin",
+  ggplot2::GeomViolin,
+  draw_group = function(self, data, ..., draw_quantiles = NULL) {
+    data <- transform(data,
+                      xminv = x - violinwidth * (x - xmin),
+                      xmaxv = x + violinwidth * (xmax - x)
+    )
+    grp <- data[1, "group"]
+    newdata <- plyr::arrange(
+      transform(data, x = if (grp %% 2 == 1) xminv else xmaxv),
+      if (grp %% 2 == 1) y else -y
+    )
+    newdata <- rbind(newdata[1, ], newdata, newdata[nrow(newdata), ], newdata[1, ])
+    newdata[c(1, nrow(newdata) - 1, nrow(newdata)), "x"] <- round(newdata[1, "x"])
+    if (length(draw_quantiles) > 0 & !scales::zero_range(range(data$y))) {
+      stopifnot(all(draw_quantiles >= 0), all(draw_quantiles <= 1))
+      quantiles <- ggplot2:::create_quantile_segment_frame(data, draw_quantiles)
+      aesthetics <- data[rep(1, nrow(quantiles)), setdiff(names(data), c("x", "y")), drop = FALSE]
+      aesthetics$alpha <- rep(1, nrow(quantiles))
+      both <- cbind(quantiles, aesthetics)
+      quantile_grob <- GeomPath$draw_panel(both, ...)
+      ggplot2:::ggname(
+        "geom_split_violin",
+        grid::grobTree(GeomPolygon$draw_panel(newdata, ...), quantile_grob)
+      )
+    } else {
+      ggplot2:::ggname("geom_split_violin", GeomPolygon$draw_panel(newdata, ...))
+    }
+  }
+)
+
+geom_split_violin <- function(mapping = NULL,
+                              data = NULL,
+                              stat = "ydensity",
+                              position = "identity", ...,
+                              draw_quantiles = NULL,
+                              trim = TRUE,
+                              scale = "area",
+                              na.rm = FALSE,
+                              show.legend = NA,
+                              inherit.aes = TRUE) {
+  layer(
+    data = data,
+    mapping = mapping,
+    stat = stat,
+    geom = GeomSplitViolin,
+    position = position,
+    show.legend = show.legend,
+    inherit.aes = inherit.aes,
+    params = list(
+      trim = trim,
+      scale = scale,
+      draw_quantiles = draw_quantiles,
+      na.rm = na.rm, ...
+    )
+  )
 }

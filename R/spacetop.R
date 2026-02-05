@@ -1,5 +1,8 @@
 get_spacetop_demographics <- function() {
-  readr::read_tsv(here::here("data/participants.tsv"), col_select = c(-group)) |>
+  readr::read_tsv(
+    here::here("data/participants.tsv"),
+    col_select = c(-group)
+  ) |>
     dplyr::rename(sub = participant_id) |>
     dplyr::mutate(
       sex = dplyr::case_match(
@@ -25,10 +28,17 @@ get_spacetop <- function(file, exclusion) {
     do_casting()
 }
 
-get_spacetop_exclusion <- function(src = "data/exclusion/Spacetop_exclusions.rds") {
+get_spacetop_exclusion <- function(
+  src = "data/exclusion/Spacetop_exclusions.rds"
+) {
   exclusion <- readRDS(src)
   exclusion$Spacetop_exclusion_table |>
     tibble::as_tibble() |>
-    dplyr::select(sub = Excluded_sub, ses = Excluded_ses, task = Excluded_task, run = Excluded_run) |>
+    dplyr::select(
+      sub = Excluded_sub,
+      ses = Excluded_ses,
+      task = Excluded_task,
+      run = Excluded_run
+    ) |>
     dplyr::mutate(run = as.character(run))
 }
