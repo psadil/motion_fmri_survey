@@ -12,12 +12,12 @@ get_demographics <- function(
 ) {
   dplyr::bind_rows(
     list(
-      UKB = ukb,
-      human_connectome_project_openaccess = hcpya,
-      SpaceTop = spacetop,
-      HCPDevelopmentRec = hcpdev,
-      HCPAgingRec = hcpaging,
-      ABCD = abcd
+      ukb = ukb,
+      hcpya = hcpya,
+      spacetop = spacetop,
+      hcpd = hcpdev,
+      hcpa = hcpaging,
+      abcd = abcd
     ),
     .id = "dataset"
   ) |>
@@ -52,25 +52,20 @@ get_demographics <- function(
     dplyr::distinct() |> # ABCD has some duplicates
     dplyr::mutate(
       sex_gender = dplyr::if_else(is.na(sex), gender, sex),
-      sex_gender = dplyr::case_match(
+      sex_gender = dplyr::replace_values(
         sex_gender,
         "Male" ~ "M",
-        "Female" ~ "F",
-        .default = sex_gender
+        "Female" ~ "F"
       ),
       sub = stringr::str_remove(sub, "sub-")
     ) |>
     dplyr::select(-sex, -gender) |>
+    factorize_ses()
+}
+
+factorize_ses <- function(.d) {
+  .d |>
     dplyr::mutate(
-      dataset = dplyr::case_match(
-        dataset,
-        "HCPAgingRec" ~ "hcpa",
-        "HCPDevelopmentRec" ~ "hcpd",
-        "human_connectome_project_openaccess" ~ "hcpya",
-        "UKB" ~ "ukb",
-        "ABCD" ~ "abcd",
-        "SpaceTop" ~ "spacetop"
-      ),
       ses = factor(
         ses,
         levels = c(
@@ -78,25 +73,17 @@ get_demographics <- function(
           "2",
           "3",
           "4",
-          "baselineYear1Arm1",
-          "2YearFollowUpYArm1",
-          "4YearFollowUpYArm1"
+          "baseline",
+          "Year2",
+          "Year4"
         ),
         ordered = TRUE
-      ),
-      ses = forcats::fct_recode(
-        ses,
-        baseline = "baselineYear1Arm1",
-        Year2 = "2YearFollowUpYArm1",
-        Year4 = "4YearFollowUpYArm1"
-      ) |>
-        forcats::fct_relevel("Year2", after = Inf) |>
-        forcats::fct_relevel("Year4", after = Inf)
+      )
     )
 }
 
 read_nda <- function(src) {
-  header <- readr::read_tsv(here::here(src), n_max = 1)
+  header <- readr::read_tsv(here::here(src), n_max = 1, show_col_types = FALSE)
 
   readr::read_tsv(here::here(src), skip = 2, col_names = colnames(header))
 }
@@ -135,8 +122,8 @@ add_ped <- function(.data) {
 do_casting <- function(.data) {
   .data |>
     dplyr::mutate(
-      ses = as.character(ses),
-      sub = as.character(sub)
+      dplyr::across(tidyselect::any_of(c("sub", "ses")), as.character),
+      dplyr::across(tidyselect::any_of(c("run", "scan")), as.integer)
     )
 }
 
@@ -154,7 +141,7 @@ summarise_by <- function(.data, .cols) {
 set_pedrun <- function(.data) {
   .data |>
     dplyr::mutate(
-      ped2 = dplyr::case_match(
+      ped2 = dplyr::replace_values(
         ped,
         "AP" ~ "2",
         "PA" ~ "1",
@@ -300,88 +287,10 @@ get_lost_lenient <- function(by_run, mfd_thresh = 0.55) {
 }
 
 
-bind_datasets <- function(hcpya, hcpa, hcpd, ukb, abcd, spacetop) {
-  dplyr::bind_rows(
-    list(
-      hcpya = hcpya,
-      hcpa = hcpa,
-      hcpd = hcpd,
-      ukb = ukb,
-      abcd = abcd,
-      spacetop = spacetop
-    ),
-    .id = "dataset"
-  ) |>
-    dplyr::mutate(
-      ses = factor(
-        ses,
-        levels = c(
-          "1",
-          "2",
-          "3",
-          "4",
-          "baselineYear1Arm1",
-          "2YearFollowUpYArm1",
-          "4YearFollowUpYArm1"
-        ),
-        ordered = TRUE
-      ),
-      ses = forcats::fct_recode(
-        ses,
-        baseline = "baselineYear1Arm1",
-        Year2 = "2YearFollowUpYArm1",
-        Year4 = "4YearFollowUpYArm1"
-      ) |>
-        forcats::fct_relevel("Year2", after = Inf) |>
-        forcats::fct_relevel("Year4", after = Inf),
-      scan = factor(scan, ordered = TRUE)
-    ) |>
-    dplyr::select(
-      dataset,
-      sub,
-      ses,
-      task,
-      scan,
-      t,
-      time,
-      rmsd,
-      tidyselect::contains("frame")
-    ) |>
-    tidyr::pivot_longer(
-      tidyselect::contains("frame"),
-      names_to = "filtered",
-      values_to = "framewise_displacement"
-    ) |>
-    dplyr::mutate(filtered = stringr::str_detect(filtered, "filtered")) |>
-    dplyr::group_by(dataset)
-}
-
 bind_datasets <- function(datasets) {
   dplyr::bind_rows(datasets, .id = "dataset") |>
-    dplyr::mutate(
-      ses = factor(
-        ses,
-        levels = c(
-          "1",
-          "2",
-          "3",
-          "4",
-          "baselineYear1Arm1",
-          "2YearFollowUpYArm1",
-          "4YearFollowUpYArm1"
-        ),
-        ordered = TRUE
-      ),
-      ses = forcats::fct_recode(
-        ses,
-        baseline = "baselineYear1Arm1",
-        Year2 = "2YearFollowUpYArm1",
-        Year4 = "4YearFollowUpYArm1"
-      ) |>
-        forcats::fct_relevel("Year2", after = Inf) |>
-        forcats::fct_relevel("Year4", after = Inf),
-      scan = factor(scan, ordered = TRUE)
-    ) |>
+    factorize_ses() |>
+    dplyr::mutate(scan = factor(scan, ordered = TRUE)) |>
     dplyr::select(
       dataset,
       sub,
@@ -411,45 +320,67 @@ GeomSplitViolin <- ggplot2::ggproto(
   "GeomSplitViolin",
   ggplot2::GeomViolin,
   draw_group = function(self, data, ..., draw_quantiles = NULL) {
-    data <- transform(data,
-                      xminv = x - violinwidth * (x - xmin),
-                      xmaxv = x + violinwidth * (xmax - x)
+    data <- transform(
+      data,
+      xminv = x - violinwidth * (x - xmin),
+      xmaxv = x + violinwidth * (xmax - x)
     )
     grp <- data[1, "group"]
     newdata <- plyr::arrange(
       transform(data, x = if (grp %% 2 == 1) xminv else xmaxv),
       if (grp %% 2 == 1) y else -y
     )
-    newdata <- rbind(newdata[1, ], newdata, newdata[nrow(newdata), ], newdata[1, ])
-    newdata[c(1, nrow(newdata) - 1, nrow(newdata)), "x"] <- round(newdata[1, "x"])
+    newdata <- rbind(
+      newdata[1, ],
+      newdata,
+      newdata[nrow(newdata), ],
+      newdata[1, ]
+    )
+    newdata[c(1, nrow(newdata) - 1, nrow(newdata)), "x"] <- round(newdata[
+      1,
+      "x"
+    ])
     if (length(draw_quantiles) > 0 & !scales::zero_range(range(data$y))) {
       stopifnot(all(draw_quantiles >= 0), all(draw_quantiles <= 1))
       quantiles <- ggplot2:::create_quantile_segment_frame(data, draw_quantiles)
-      aesthetics <- data[rep(1, nrow(quantiles)), setdiff(names(data), c("x", "y")), drop = FALSE]
+      aesthetics <- data[
+        rep(1, nrow(quantiles)),
+        setdiff(names(data), c("x", "y")),
+        drop = FALSE
+      ]
       aesthetics$alpha <- rep(1, nrow(quantiles))
       both <- cbind(quantiles, aesthetics)
       quantile_grob <- GeomPath$draw_panel(both, ...)
       ggplot2:::ggname(
         "geom_split_violin",
-        grid::grobTree(GeomPolygon$draw_panel(newdata, ...), quantile_grob)
+        grid::grobTree(
+          ggplot2::GeomPolygon$draw_panel(newdata, ...),
+          quantile_grob
+        )
       )
     } else {
-      ggplot2:::ggname("geom_split_violin", GeomPolygon$draw_panel(newdata, ...))
+      ggplot2:::ggname(
+        "geom_split_violin",
+        ggplot2::GeomPolygon$draw_panel(newdata, ...)
+      )
     }
   }
 )
 
-geom_split_violin <- function(mapping = NULL,
-                              data = NULL,
-                              stat = "ydensity",
-                              position = "identity", ...,
-                              draw_quantiles = NULL,
-                              trim = TRUE,
-                              scale = "area",
-                              na.rm = FALSE,
-                              show.legend = NA,
-                              inherit.aes = TRUE) {
-  layer(
+geom_split_violin <- function(
+  mapping = NULL,
+  data = NULL,
+  stat = "ydensity",
+  position = "identity",
+  ...,
+  draw_quantiles = NULL,
+  trim = TRUE,
+  scale = "area",
+  na.rm = FALSE,
+  show.legend = NA,
+  inherit.aes = TRUE
+) {
+  ggplot2::layer(
     data = data,
     mapping = mapping,
     stat = stat,
@@ -461,7 +392,31 @@ geom_split_violin <- function(mapping = NULL,
       trim = trim,
       scale = scale,
       draw_quantiles = draw_quantiles,
-      na.rm = na.rm, ...
+      na.rm = na.rm,
+      ...
     )
   )
+}
+
+write_png <- function(p, file, width, height) {
+  ggplot2::ggsave(
+    file,
+    p,
+    device = ragg::agg_png,
+    width = width,
+    height = height
+  )
+  file
+}
+
+write_tikz <- function(p, file, width, height) {
+  ggplot2::ggsave(
+    file,
+    p,
+    device = tikzDevice::tikz,
+    width = width,
+    height = height,
+    standAlone = TRUE
+  )
+  file
 }

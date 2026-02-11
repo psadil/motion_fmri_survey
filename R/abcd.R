@@ -1,31 +1,37 @@
 get_abcd <- function(sources, abcd_exclusion) {
-  to_exclude <- abcd_exclusion |>
-    arrow::as_arrow_table() |>
-    dplyr::mutate(
-      sub = arrow::cast(sub, arrow::large_utf8()),
-      ses = arrow::cast(ses, arrow::large_utf8()),
-      task = arrow::cast(task, arrow::large_utf8()),
-      run = arrow::cast(run, arrow::large_utf8())
-    )
-
-  arrow::open_dataset(sources) |>
-    dplyr::anti_join(to_exclude) |>
+  duckplyr::read_parquet_duckdb(sources, prudence = "lavish") |>
+    do_casting() |>
+    convert_abcd_ses() |>
+    dplyr::anti_join(abcd_exclusion, dplyr::join_by(sub, ses, task, run)) |>
     dplyr::filter(t > 0) |>
     dplyr::mutate(
       time = t * 0.8,
-      run = as.integer(run),
       ped = "AP",
-      scan = as.integer(run)
+      scan = run
     ) |>
-    dplyr::collect() |>
-    add_ped() |>
-    do_casting()
+    dplyr::collect()
 }
 
-get_abcd_events <- function(
-  abcd_design = "/Users/psadil/data/events/derivatives/abcd.parquet"
-) {
-  events <- arrow::open_dataset(abcd_design)
+convert_abcd_ses <- function(.d) {
+  .d |>
+    dplyr::mutate(
+      ses = dplyr::replace_values(
+        ses,
+        "baseline_year_1_arm_1" ~ "baseline",
+        "2_year_follow_up_y_arm_1" ~ "Year2",
+        "4_year_follow_up_y_arm_1" ~ "Year4"
+      ),
+      ses = dplyr::replace_values(
+        ses,
+        "baselineYear1Arm1" ~ "baseline",
+        "2YearFollowUpYArm1" ~ "Year2",
+        "4YearFollowUpYArm1" ~ "Year4"
+      )
+    )
+}
+
+get_abcd_events <- function(abcd_design) {
+  events <- duckplyr::read_parquet_duckdb(abcd_design, prudence = "lavish")
 
   cue_design <- events |>
     dplyr::filter(task == "nback") |>
@@ -150,20 +156,13 @@ get_abcd_demographics <- function(source) {
       interview_date = lubridate::as_date(interview_date, format = "%m/%d/%Y")
     ) |>
     dplyr::semi_join(dplyr::select(abcd_subs, sub)) |>
+    convert_abcd_ses() |>
     dplyr::mutate(
-      ses = dplyr::case_match(
-        ses,
-        "baseline_year_1_arm_1" ~ "baselineYear1Arm1",
-        "2_year_follow_up_y_arm_1" ~ "2YearFollowUpYArm1",
-        "4_year_follow_up_y_arm_1" ~ "4YearFollowUpYArm1",
-        .default = ses
-      ),
       age = age / 12,
-      sex = dplyr::case_match(
+      sex = dplyr::replace_values(
         sex,
         "F" ~ "Female",
-        "M" ~ "Male",
-        .default = sex
+        "M" ~ "Male"
       )
     ) |>
     dplyr::distinct(sub, deviceserialnumber, interview_date, age, sex, ses) |>
@@ -172,67 +171,58 @@ get_abcd_demographics <- function(source) {
     dplyr::slice_min(order_by = age, n = 1, by = c(sub, ses)) |> # errors in dataset
     dplyr::select(-interview_date)
 
-  age <- readr::read_csv("data/abcd_y_lt.csv") |>
+  age <- readr::read_csv(
+    "data/tabular/core/abcd-general/abcd_y_lt.csv",
+    show_col_types = FALSE
+  ) |>
     dplyr::rename(sub = src_subject_id, ses = eventname) |>
+    convert_abcd_ses() |>
     dplyr::mutate(
       sub = stringr::str_remove(sub, "_"),
-      ses = dplyr::case_match(
-        ses,
-        "baseline_year_1_arm_1" ~ "baselineYear1Arm1",
-        "2_year_follow_up_y_arm_1" ~ "2YearFollowUpYArm1",
-        "4_year_follow_up_y_arm_1" ~ "4YearFollowUpYArm1",
-        .default = ses
-      ),
       age = interview_age / 12
     ) |>
     dplyr::filter(!is.na(age)) |>
     dplyr::select(sub, ses, age)
 
-  sex <- readr::read_csv("data/gish_y_gi.csv") |>
+  sex <- readr::read_csv(
+    "data/tabular/core/gender-identity-sexual-health/gish_y_gi.csv",
+    show_col_types = FALSE
+  ) |>
     dplyr::rename(sub = src_subject_id, ses = eventname) |>
+    convert_abcd_ses() |>
     dplyr::mutate(
       sub = stringr::str_remove(sub, "_"),
-      ses = dplyr::case_match(
-        ses,
-        "baseline_year_1_arm_1" ~ "baselineYear1Arm1",
-        "2_year_follow_up_y_arm_1" ~ "2YearFollowUpYArm1",
-        "4_year_follow_up_y_arm_1" ~ "4YearFollowUpYArm1",
-        .default = ses
-      ),
       sex = kbi_sex_assigned_at_birth
     ) |>
     dplyr::select(sub, ses, sex) |>
     tidyr::pivot_wider(names_from = ses, values_from = sex) |>
     dplyr::mutate(
       sex = dplyr::if_else(
-        is.na(baselineYear1Arm1),
+        is.na(baseline),
         `1_year_follow_up_y_arm_1`,
-        baselineYear1Arm1
+        baseline
       ),
-      sex = dplyr::if_else(is.na(sex), `2YearFollowUpYArm1`, sex),
+      sex = dplyr::if_else(is.na(sex), Year2, sex),
       sex = dplyr::if_else(is.na(sex), `3_year_follow_up_y_arm_1`, sex),
-      sex = dplyr::if_else(is.na(sex), `4YearFollowUpYArm1`, sex),
-      sex = dplyr::case_match(
+      sex = dplyr::if_else(is.na(sex), Year4, sex),
+      sex = dplyr::recode_values(
         sex,
         1 ~ "Male",
         2 ~ "Female",
-        .default = NA
+        default = NA_character_
       )
     ) |>
     dplyr::filter(!is.na(sex)) |>
     dplyr::select(sub, sex)
 
-  bmi <- readr::read_csv("data/ph_y_anthro.csv") |>
+  bmi <- readr::read_csv(
+    "data/tabular/core/physical-health/ph_y_anthro.csv",
+    show_col_types = FALSE
+  ) |>
     dplyr::rename(sub = src_subject_id, ses = eventname) |>
+    convert_abcd_ses() |>
     dplyr::mutate(
       sub = stringr::str_remove(sub, "_"),
-      ses = dplyr::case_match(
-        ses,
-        "baseline_year_1_arm_1" ~ "baselineYear1Arm1",
-        "2_year_follow_up_y_arm_1" ~ "2YearFollowUpYArm1",
-        "4_year_follow_up_y_arm_1" ~ "4YearFollowUpYArm1",
-        .default = ses
-      )
     ) |>
     dplyr::filter(!is.na(anthroheightcalc), !is.na(anthroweightcalc)) |>
     dplyr::mutate(
@@ -246,10 +236,7 @@ get_abcd_demographics <- function(source) {
   dplyr::full_join(main, bmi, by = dplyr::join_by(sub, ses)) |>
     dplyr::full_join(sex, by = dplyr::join_by(sub)) |>
     dplyr::full_join(age, by = dplyr::join_by(sub, ses)) |>
-    dplyr::filter(
-      ses %in%
-        c("baselineYear1Arm1", "2YearFollowUpYArm1", "4YearFollowUpYArm1")
-    ) |>
+    dplyr::filter(ses %in% c("baseline", "Year2", "Year4")) |>
     dplyr::mutate(
       age = dplyr::if_else(is.na(age.y), age.x, age.y),
       sex = dplyr::if_else(is.na(sex.y), sex.x, sex.y),
@@ -261,7 +248,7 @@ get_abcd_demographics <- function(source) {
 get_abcd_excl_rest <- function() {
   # https://wiki.abcdstudy.org/release-notes/imaging/quality-control.html#rs-fmri-data-recommended-for-inclusion
   # everything except censoring
-  srcs <- here::here("data", "abcd_tabular", "imaging")
+  srcs <- here::here("data", "tabular", "core", "imaging")
   rsfMRI_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_rsfmr.csv"),
     col_select = c(
@@ -380,7 +367,7 @@ get_abcd_excl_rest <- function() {
 get_abcd_excl_mid <- function() {
   # https://wiki.abcdstudy.org/release-notes/imaging/quality-control.html#rs-fmri-data-recommended-for-inclusion
   # everything except censoring
-  srcs <- here::here("data", "abcd_tabular", "imaging")
+  srcs <- here::here("data", "tabular", "core", "imaging")
   MID_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_mid.csv"),
     col_select = c(
@@ -525,7 +512,7 @@ get_abcd_excl_mid <- function() {
 get_abcd_excl_sst <- function() {
   # https://docs.abcdstudy.org/latest/documentation/imaging/type_qc.html#sst-task-fmri-data-recommended-for-inclusion
   # everything except censoring
-  srcs <- here::here("data", "abcd_tabular", "imaging")
+  srcs <- here::here("data", "tabular", "core", "imaging")
   SST_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_sst.csv"),
     col_select = c(
@@ -682,7 +669,7 @@ get_abcd_excl_sst <- function() {
 get_abcd_excl_nback <- function() {
   # https://wiki.abcdstudy.org/release-notes/imaging/quality-control.html#rs-fmri-data-recommended-for-inclusion
   # everything except censoring
-  srcs <- here::here("data", "abcd_tabular", "imaging")
+  srcs <- here::here("data", "tabular", "core", "imaging")
   nBack_tfMRI_series_passed_rawQC <- readr::read_csv(
     fs::path(srcs, "mri_y_qc_raw_tfmr_nback.csv"),
     col_select = c(
@@ -838,7 +825,18 @@ get_abcd_too_short <- function(sources) {
     dplyr::collect() |>
     dplyr::anti_join(expected, by = dplyr::join_by(n_tr)) |>
     dplyr::select(sub, task, ses, run) |>
-    dplyr::collect()
+    dplyr::collect() |>
+    convert_abcd_ses() |>
+    do_casting()
+}
+
+get_abcd_too_long <- function(sources) {
+  # can't go by max n_tr. Need to go by most common
+  expected <- duckplyr::read_parquet_duckdb(sources) |>
+    dplyr::filter(t > 388, task == "rest") |>
+    dplyr::distinct(sub, ses, task, run) |>
+    convert_abcd_ses() |>
+    do_casting()
 }
 
 get_abcd_exclusion_official <- function() {
@@ -847,28 +845,27 @@ get_abcd_exclusion_official <- function() {
   mid <- get_abcd_excl_mid()
   rest <- get_abcd_excl_rest()
   dplyr::bind_rows(sst, nback, mid, rest) |>
+    convert_abcd_ses() |>
     dplyr::mutate(
-      ses = dplyr::case_match(
-        ses,
-        "baseline_year_1_arm_1" ~ "baselineYear1Arm1",
-        "2_year_follow_up_y_arm_1" ~ "2YearFollowUpYArm1",
-        "4_year_follow_up_y_arm_1" ~ "4YearFollowUpYArm1",
-      ),
       sub = stringr::str_remove(sub, "_")
-    )
+    ) |>
+    do_casting()
 }
 
 get_abcd_exclusion_run <- function(sources) {
   arrow::open_dataset(sources) |>
     dplyr::distinct(sub, task, ses, run) |>
     dplyr::filter(run %in% c("05", "06")) |>
-    dplyr::collect()
+    dplyr::collect() |>
+    do_casting() |>
+    convert_abcd_ses()
 }
 
 get_abcd_exclusion_demographics <- function(source, demographics) {
-  abcd_subs <- arrow::open_dataset(source) |>
+  abcd_subs <- duckplyr::read_parquet_duckdb(source) |>
     dplyr::distinct(sub, ses, task, run) |>
-    dplyr::collect()
+    convert_abcd_ses() |>
+    do_casting()
 
   dplyr::anti_join(
     abcd_subs,
@@ -878,19 +875,30 @@ get_abcd_exclusion_demographics <- function(source, demographics) {
       by = dplyr::join_by(sub, ses)
     ),
     by = dplyr::join_by(sub, ses)
-  )
+  ) |>
+    convert_abcd_ses() |>
+    do_casting() |>
+    dplyr::collect()
 }
 
 
 get_abcd_exclusion <- function(source, demographics) {
-  all_runs <- arrow::open_dataset(source) |>
+  all_runs <- duckplyr::read_parquet_duckdb(source) |>
     dplyr::distinct(sub, task, ses, run) |>
-    dplyr::collect()
+    dplyr::collect() |>
+    convert_abcd_ses() |>
+    do_casting()
   too_short <- all_runs |>
     dplyr::semi_join(
       get_abcd_too_short(source),
       by = dplyr::join_by(sub, task, ses, run)
     )
+  too_long <- all_runs |>
+    dplyr::semi_join(
+      get_abcd_too_long(source),
+      by = dplyr::join_by(sub, task, ses, run)
+    )
+
   official <- all_runs |>
     dplyr::semi_join(
       get_abcd_exclusion_official(),
@@ -908,7 +916,8 @@ get_abcd_exclusion <- function(source, demographics) {
       atypical_length = too_short,
       official = official,
       extra_runs = runs,
-      missing_demographics = from_demographics
+      missing_demographics = from_demographics,
+      too_long = too_long
     ),
     .id = "notes"
   ) |>

@@ -1,8 +1,33 @@
 from pathlib import Path
 import re
 import polars as pl
+from scipy import signal
+import numpy as np
 
 from pymrimisc import motion
+import nitime.algorithms as tsa
+
+
+def find_peak_freq(
+    series: pl.Series, tr: float, lower: float = 0.2, upper: float = 0.6
+) -> float:
+    try:
+        x, y, _ = tsa.multi_taper_psd(
+            signal.detrend(series.to_numpy()),
+            Fs=1 / tr,
+            adaptive=True,
+            jackknife=False,
+            NW=8,
+            NFFT=512,
+        )
+        xi = np.where(np.logical_and(x >= lower, x <= upper))
+        yy = y[xi]
+        xx = x[xi]
+        out = xx[np.where(yy == np.max(yy))][0]
+    except:
+        return np.nan
+
+    return out
 
 
 def add_filtered(
@@ -19,7 +44,7 @@ def add_filtered(
             .group_by(cols)
             .agg(
                 pl.col(ped_trans).map_batches(
-                    lambda x: motion.find_peak_freq(x, tr=tr, lower=0.1, upper=0.6),
+                    lambda x: find_peak_freq(x, tr=tr, lower=0.15, upper=0.6),
                     return_dtype=pl.Float64,
                     returns_scalar=True,
                 )
@@ -34,7 +59,7 @@ def add_filtered(
         .group_by(col_for_peak)
         .agg(
             med=pl.col(ped_trans).median(),
-            lower=pl.col(ped_trans).quantile(0.5),
+            lower=pl.col(ped_trans).quantile(0.25),
             upper=pl.col(ped_trans).quantile(0.75),
         )
     )
@@ -93,17 +118,15 @@ def add_fd(d: pl.DataFrame, cols: list[str]) -> pl.DataFrame:
     return d.join(d_fd, on=[*cols, "t"])
 
 
-root = Path("derivatives/premotion")
-derivatives = Path("derivatives") / "motion"
+root = Path("rawdata")
+derivatives = Path("derivatives2")
 
 
-(
-    pl.scan_parquet(root / "dataset=hcpa")
+hcpaging = (
+    pl.scan_ipc(root / "dataset=hcpa")
     .with_columns(
         ped=pl.col("src").str.extract(r"(AP|PA)"),
-        task=pl.col("src")
-        .str.extract(r"(REST1|REST2|CARIT|FACENAME|VISMOTOR)")
-        .str.to_lowercase(),
+        task=pl.col("src").str.extract(r"(REST1|REST2|CARIT|FACENAME|VISMOTOR)"),
         sub=pl.col("sub").cast(pl.Utf8),
         ses=pl.col("ses").cast(pl.Utf8),
     )
@@ -116,19 +139,19 @@ derivatives = Path("derivatives") / "motion"
         col_for_peak=["task"],
     )
     .pipe(add_fd, cols=["sub", "ses", "task", "ped"])
-    .write_parquet(derivatives / "hcpa.parquet")
 )
 
+hcpaging.write_parquet(derivatives / "HCPAgingRec.parquet")
+hcpaging.write_csv(derivatives / "HCPAgingRec.tsv", separator="\t")
+del hcpaging
 
-(
-    pl.scan_parquet(root / "dataset=hcpd")
+hcpd = (
+    pl.scan_ipc(root / "dataset=hcpd")
     .with_columns(
         ped=pl.col("src").str.extract(r"(AP|PA)"),
-        task=pl.col("src")
-        .str.extract(
+        task=pl.col("src").str.extract(
             r"(REST1a|REST1b|REST1|REST2a|REST2b|REST2|CARIT|EMOTION|GUESSING)"
-        )
-        .str.to_lowercase(),
+        ),
         sub=pl.col("sub").cast(pl.Utf8),
         ses=pl.col("ses").cast(pl.Utf8),
     )
@@ -142,19 +165,19 @@ derivatives = Path("derivatives") / "motion"
         col_for_peak=["task"],
     )
     .pipe(add_fd, cols=["sub", "ses", "task", "ped"])
-    .write_parquet(derivatives / "hcpd.parquet")
 )
 
+hcpd.write_parquet(derivatives / "HCPDevelopmentRec.parquet")
+hcpd.write_csv(derivatives / "HCPDevelopmentRec.tsv", separator="\t")
+del hcpd
 
-(
-    pl.scan_parquet(root / "dataset=hcpya")
+hcpya = (
+    pl.scan_ipc(root / "dataset=hcpya")
     .with_columns(
         ped=pl.col("src").str.extract(r"(LR|RL)"),
-        task=pl.col("src")
-        .str.extract(
+        task=pl.col("src").str.extract(
             r"(REST1|REST2|RELATIONAL|EMOTION|MOTOR|GAMBLING|LANGUAGE|SOCIAL|WM)"
-        )
-        .str.to_lowercase(),
+        ),
         sub=pl.col("sub").cast(pl.Utf8),
         ses=pl.col("ses").cast(pl.Utf8),
     )
@@ -169,15 +192,17 @@ derivatives = Path("derivatives") / "motion"
         ped_trans="trans_x",
     )
     .pipe(add_fd, cols=["sub", "ses", "task", "ped"])
-    .write_parquet(
-        derivatives / "hcpya.parquet",
-    )
 )
+hcpya.write_csv(derivatives / "human-connectome-project-openaccess.tsv", separator="\t")
 
+hcpya.write_parquet(
+    derivatives / "human-connectome-project-openaccess.parquet",
+)
+del hcpya
 
 # some abcd scans are just way too short
 abcd_too_short = (
-    pl.scan_parquet(root / "dataset=abcd")
+    pl.scan_ipc(root / "dataset=abcd")
     .with_columns(
         task=pl.col("src").str.extract(r"(rest|mid|sst|nback)"),
         run=pl.col("src").str.extract(r"run-(\d+)"),
@@ -188,8 +213,8 @@ abcd_too_short = (
     .filter(pl.col("len") < 10)
 )
 
-(
-    pl.scan_parquet(root / "dataset=abcd")
+abcd = (
+    pl.scan_ipc(root / "dataset=abcd")
     .with_columns(
         task=pl.col("src").str.extract(r"(rest|mid|sst|nback)"),
         run=pl.col("src").str.extract(r"run-(\d+)"),
@@ -204,11 +229,13 @@ abcd_too_short = (
         col_for_peak=["task", "ses"],
     )
     .pipe(add_fd, cols=["sub", "ses", "task", "run"])
-    .write_parquet(derivatives / "abcd.parquet")
 )
+abcd.write_parquet(derivatives / "abcd.parquet")
+abcd.write_csv(derivatives / "abcd.tsv", separator="\t")
+del abcd
 
-(
-    pl.scan_parquet(root / "dataset=ukb")
+ukb = (
+    pl.scan_ipc(root / "dataset=ukb")
     .with_columns(
         task=pl.when(pl.col("src") == 20227)
         .then(pl.lit("rest"))
@@ -225,26 +252,36 @@ abcd_too_short = (
         col_for_peak=["task"],
     )
     .pipe(add_fd, cols=["sub", "ses", "task"])
-    .write_parquet(derivatives / "ukb.parquet")
 )
+ukb.write_parquet(derivatives / "ukb.parquet")
+ukb.write_csv(derivatives / "ukb.tsv", separator="\t")
+del ukb
 
 # spacetop
 tsvs = []
-for subdir in Path("/dcs07/smart/data/SpatialTopology/ds005256-fmriprep").glob("sub*"):
+for subdir in (
+    Path("sourcedata") / "dcs04/smart/data/spatialtopology/fmriprep/results/fmriprep"
+).glob("sub*"):
     print(subdir)
-    sub = re.findall(r"(?<=sub-)\d{4}", subdir.name)[0]
+    sub = re.findall(r"(?<=sub-)\d{4}", subdir.name)
     for sesdir in subdir.glob("ses*"):
-        ses = re.findall(r"(?<=ses-)\d{2}", sesdir.name)[0]
+        ses = re.findall(r"(?<=ses-)\d{2}", sesdir.name)
         for tsv in sesdir.rglob("*tsv"):
-            task = re.findall(r"(?<=task-)[a-zA-Z]+", tsv.name)[0]
-            run = re.findall(r"(?<=run-)\d+", tsv.name)[0]
+            task = re.findall(r"(?<=task-)[a-zA-Z]+", tsv.name)
+            run = re.findall(r"(?<=run-)\d+", tsv.name)
             tsvs.append(
                 pl.read_csv(tsv, separator="\t", null_values="n/a")
                 .select(pl.selectors.starts_with("rot", "trans", "rmsd"))
-                .drop(pl.selectors.ends_with("power2"), pl.selectors.contains("deriv"))
+                .drop(
+                    pl.selectors.ends_with("power2"),
+                    pl.selectors.contains("deriv"),
+                )
                 .with_row_index("t")
                 .with_columns(
-                    sub=pl.lit(sub), ses=pl.lit(ses), task=pl.lit(task), run=pl.lit(run)
+                    sub=pl.lit(sub[0]),
+                    ses=pl.lit(ses[0]),
+                    task=pl.lit(task[0]),
+                    run=pl.lit(run[0]),
                 )
             )
 
@@ -258,5 +295,7 @@ spacetop = (
     )
     .pipe(add_fd, cols=["sub", "ses", "task", "run"])
     .fill_null(0)
-    .write_parquet(derivatives / "spacetop.parquet")
 )
+
+spacetop.write_parquet(derivatives / "spacetop.parquet")
+spacetop.write_csv(derivatives / "spacetop.tsv", separator="\t")

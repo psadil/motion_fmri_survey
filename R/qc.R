@@ -11,7 +11,8 @@ ledoit_wolf_shrinkage <- function(X) {
   # use delta_ to compute beta
   beta <- 1.0 / (n_features * n_samples) * (beta_ / n_samples - delta_)
   # delta is the sum of the squared coefficients of (<X.T,X> - mu*Id) / p
-  delta <- (delta_ - 2.0 * mu * sum(emp_cov_trace) + n_features * mu^2) / n_features
+  delta <- (delta_ - 2.0 * mu * sum(emp_cov_trace) + n_features * mu^2) /
+    n_features
   # get final beta as the min between beta and delta
   # We do this to prevent shrinking more than "1", which would invert
   # the value of covariances
@@ -34,15 +35,21 @@ lw <- function(X) {
   emp_cov <- crossprod(Xc) / n_samples
   mu <- sum(psych::tr(emp_cov)) / n_features
   shrunk_cov <- (1.0 - shrinkage) * emp_cov
-  shrunk_cov[seq(1, length(emp_cov), by = n_features + 1)] <- shrunk_cov[seq(1, length(emp_cov), by = n_features + 1)] + shrinkage * mu
+  shrunk_cov[seq(1, length(emp_cov), by = n_features + 1)] <- shrunk_cov[seq(
+    1,
+    length(emp_cov),
+    by = n_features + 1
+  )] +
+    shrinkage * mu
   shrunk_cov
 }
 
 
 get_qc_src <- function(
-    by_run,
-    timeseries_src = "data/timeseries/derivatives",
-    quantile_range = c(.9, .99)) {
+  by_run,
+  timeseries_src = "data/timeseries/derivatives",
+  quantile_range = c(.9, .99)
+) {
   avg <- by_run |>
     dplyr::filter(dataset == "ukb", ses == "2", task == "rest", !filtered) |>
     dplyr::distinct(sub, loc) |>
@@ -54,8 +61,9 @@ get_qc_src <- function(
       )
     )
 
-
-  tibble::tibble(src = fs::dir_ls(timeseries_src, glob = "*arrow", recurse = TRUE)) |>
+  tibble::tibble(
+    src = fs::dir_ls(timeseries_src, glob = "*arrow", recurse = TRUE)
+  ) |>
     dplyr::mutate(sub = stringr::str_extract(src, "[[:digit:]]{7}")) |>
     dplyr::semi_join(avg, by = dplyr::join_by(sub)) |>
     dplyr::left_join(avg) |>
@@ -64,9 +72,10 @@ get_qc_src <- function(
 }
 
 get_qc_src_hcpya <- function(
-    by_run,
-    timeseries_src = "/Users/psadil/Desktop/hcp_qc/timeseries.arrow",
-    quantile_range = c(.9, .99)) {
+  by_run,
+  timeseries_src = "/Users/psadil/Desktop/hcp_qc/timeseries.arrow",
+  quantile_range = c(.9, .99)
+) {
   avg <- by_run |>
     dplyr::filter(dataset == "hcpya", task == "rest", scan == 2, !filtered) |>
     dplyr::distinct(sub, loc) |>
@@ -78,7 +87,9 @@ get_qc_src_hcpya <- function(
       )
     )
 
-  tibble::tibble(src = fs::dir_ls(timeseries_src, glob = "*arrow", recurse = TRUE)) |>
+  tibble::tibble(
+    src = fs::dir_ls(timeseries_src, glob = "*arrow", recurse = TRUE)
+  ) |>
     dplyr::mutate(sub = stringr::str_extract(src, "[[:digit:]]{6}")) |>
     dplyr::semi_join(avg, by = dplyr::join_by(sub)) |>
     dplyr::left_join(avg) |>
@@ -95,7 +106,8 @@ get_cor_by_thresh <- function(d, window_width = 150) {
     dplyr::group_nest(sub, ses, filtered, iter, window_start) |>
     dplyr::mutate(
       data = purrr::map2(
-        data, window_start,
+        data,
+        window_start,
         ~ .x |>
           dplyr::slice_min(
             order_by = framewise_displacement,
@@ -121,10 +133,12 @@ get_cor_by_thresh <- function(d, window_width = 150) {
 
 
 get_cor_by_thresh_hcpya <- function(
-    d, cleaned,
-    gold,
-    window_width = 150,
-    timeseries_src = "/Users/psadil/Desktop/hcp_qc/timeseries.arrow") {
+  d,
+  cleaned,
+  gold,
+  window_width = 150,
+  timeseries_src = "/Users/psadil/Desktop/hcp_qc/timeseries.arrow"
+) {
   n_tr <- dplyr::n_distinct(d$t)
 
   ptseries <- arrow::open_dataset(timeseries_src, format = "ipc") |>
@@ -137,7 +151,8 @@ get_cor_by_thresh_hcpya <- function(
     dplyr::group_nest(sub, filtered, iter, window_start) |>
     dplyr::mutate(
       data = purrr::map2(
-        data, window_start,
+        data,
+        window_start,
         ~ .x |>
           dplyr::slice_min(
             order_by = framewise_displacement,
@@ -173,9 +188,11 @@ get_cor_by_thresh_hcpya <- function(
 }
 
 get_cor_by_thresh_hcpya_gold <- function(
-    d, cleaned,
-    max_fd = 0.1,
-    timeseries_src = "/Users/psadil/Desktop/hcp_qc/timeseries.arrow") {
+  d,
+  cleaned,
+  max_fd = 0.1,
+  timeseries_src = "/Users/psadil/Desktop/hcp_qc/timeseries.arrow"
+) {
   d <- dplyr::filter(d, iter == 0)
   n_tr <- dplyr::n_distinct(d$t)
   subs <- d |>
@@ -307,7 +324,10 @@ get_hcpya_qc <- function(hcpya) {
 
 
 get_qc_fd <- function(src, fd, shuffle, iter = 0) {
-  fd <- dplyr::filter(fd, sub == stringr::str_extract(src$src[[1]], "[[:digit:]]{7}"))
+  fd <- dplyr::filter(
+    fd,
+    sub == stringr::str_extract(src$src[[1]], "[[:digit:]]{7}")
+  )
 
   d <- arrow::read_ipc_file(src$src[[1]]) |>
     dplyr::mutate(
@@ -326,7 +346,13 @@ get_qc_fd <- function(src, fd, shuffle, iter = 0) {
     dplyr::mutate(iter = iter, filtered = unique(fd$filtered))
 }
 
-get_qc_fd_hcpya <- function(hcpya, by_run, n_iter = 100, n_sub = 50, quantile_range = c(.5, .95)) {
+get_qc_fd_hcpya <- function(
+  hcpya,
+  by_run,
+  n_iter = 100,
+  n_sub = 50,
+  quantile_range = c(.5, .95)
+) {
   avg <- by_run |>
     dplyr::filter(dataset == "hcpya", task == "rest", scan == 2, !filtered) |>
     dplyr::distinct(sub, loc) |>

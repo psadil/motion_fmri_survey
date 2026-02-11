@@ -7,7 +7,6 @@ import pydantic
 import polars as pl
 import pandas as pd
 
-from pymrimisc import motion
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(message)s", level=logging.INFO
@@ -54,7 +53,7 @@ class MotionProcesser(pydantic.BaseModel):
             / f"sub={self.sub_id}"
             / f"ses={self.ses_id}"
             / f"src={self.src_id}"
-            / "motion.arrow"
+            / "motion.parquet"
         )
 
     @property
@@ -74,9 +73,9 @@ class MotionProcesser(pydantic.BaseModel):
             has_header=False,
             new_columns=["rmsd"],
         )
-        rmsd = pl.concat(
-            [pl.DataFrame({"rmsd": 0.0}), rmsd_tail]
-        ).with_row_index(name="t")
+        rmsd = pl.concat([pl.DataFrame({"rmsd": 0.0}), rmsd_tail]).with_row_index(
+            name="t"
+        )
 
         # polars unable to read handle variable whitespace delim
         tmp = pd.read_csv(
@@ -85,8 +84,8 @@ class MotionProcesser(pydantic.BaseModel):
             names=["rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"],
         )
 
-        pl.from_pandas(tmp).with_row_index("t").join(rmsd, on="t").write_ipc(
-            self.dst, compression="zstd"
+        pl.from_pandas(tmp).with_row_index("t").join(rmsd, on="t").write_parquet(
+            self.dst
         )
 
 
@@ -98,9 +97,7 @@ def main(src: Path, dst_root: Path):
                 for data in (
                     to_process / f"ses-{ses}" / "non-bids" / datatype / "fMRI"
                 ).glob("*MRI*/mc/prefiltered_func_data_mcf.par"):
-                    motion_processor = MotionProcesser(
-                        src=data, dst_root=dst_root
-                    )
+                    motion_processor = MotionProcesser(src=data, dst_root=dst_root)
                     logging.info(f"Working on {motion_processor.dst}")
                     motion_processor.process_run()
 

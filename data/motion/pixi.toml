@@ -1,0 +1,19 @@
+[workspace]
+authors = ["Patrick Sadil <psadil@gmail.com>"]
+channels = ["conda-forge"]
+name = "motion"
+platforms = ["osx-arm64", "linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+pydantic = ">=2.12.5,<3"
+polars = ">=1.38.0,<2"
+numpy = ">=2.4.2,<3"
+scipy = ">=1.17.0,<2"
+nitime = ">=0.12.1,<0.13"
+pandas = ">=3.0.0,<4"
+
+[pypi-dependencies]
+pymrimisc = { git = "https://github.com/psadil/pymrimisc.git" }

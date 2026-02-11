@@ -8,8 +8,6 @@ import numpy as np
 import polars as pl
 import pandas as pd
 
-from pymrimisc import motion
-
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(message)s", level=logging.INFO
@@ -44,10 +42,7 @@ class MotionProcesser(pydantic.BaseModel):
             if not len(ses) == 1:
                 # missing sessions (likely due to scans being unusable)
                 # https://wiki.humanconnectome.org/docs/HCP%20Data%20Release%20Updates%20Known%20Issues%20and%20Planned%20fixes.html
-                if (
-                    self.sub_id == "809252"
-                    and self.src_id == "tfMRI_SOCIAL_RL"
-                ):
+                if self.sub_id == "809252" and self.src_id == "tfMRI_SOCIAL_RL":
                     ses = ["2"]
                 elif self.sub_id == "196952" and self.src_id == "tfMRI_WM_LR":
                     ses = ["1"]
@@ -70,7 +65,7 @@ class MotionProcesser(pydantic.BaseModel):
             / f"sub={self.sub_id}"
             / f"ses={self.ses_id}"
             / f"src={self.src_id}"
-            / "motion.arrow"
+            / "motion.parquet"
         )
 
     @property
@@ -114,7 +109,7 @@ class MotionProcesser(pydantic.BaseModel):
 
         pl.from_pandas(tmp).with_row_index("t").with_columns(
             pl.selectors.starts_with("rot") * np.pi / 180
-        ).join(rmsd, on="t").write_ipc(self.dst, compression="zstd")
+        ).join(rmsd, on="t").write_parquet(self.dst)
 
 
 def main(src: Path, dst_root: Path, sessions: Path | None = None):

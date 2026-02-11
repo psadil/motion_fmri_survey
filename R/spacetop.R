@@ -1,31 +1,24 @@
-get_spacetop_demographics <- function() {
-  readr::read_tsv(
-    here::here("data/participants.tsv"),
-    col_select = c(-group)
-  ) |>
+get_spacetop_demographics <- function(src) {
+  readr::read_tsv(src, col_select = c(-group), show_col_types = FALSE) |>
     dplyr::rename(sub = participant_id) |>
     dplyr::mutate(
-      sex = dplyr::case_match(
+      sex = dplyr::replace_values(
         sex,
         "M" ~ "Male",
         "F" ~ "Female"
-      )
+      ),
+      sub = stringr::str_extract(sub, "(?<=sub-)[[:digit:]]+")
     ) |>
-    dplyr::mutate(sub = as.character(sub))
+    do_casting()
 }
 
 get_spacetop <- function(file, exclusion) {
-  arrow::open_dataset(file) |>
-    dplyr::collect() |>
+  duckplyr::read_parquet_duckdb(file, prudence = "lavish") |>
+    dplyr::mutate(ses = as.integer(ses)) |> # need to strip leading 0 before do_casting
+    do_casting() |>
     dplyr::anti_join(exclusion, by = dplyr::join_by(sub, ses, task, run)) |>
-    dplyr::mutate(
-      time = t * 0.46,
-      ped = "AP",
-      ses = as.integer(ses),
-      scan = as.integer(run),
-      run = as.integer(run)
-    ) |>
-    do_casting()
+    dplyr::mutate(time = t * 0.46, ped = "AP", scan = run) |>
+    dplyr::collect()
 }
 
 get_spacetop_exclusion <- function(
@@ -40,5 +33,5 @@ get_spacetop_exclusion <- function(
       task = Excluded_task,
       run = Excluded_run
     ) |>
-    dplyr::mutate(run = as.character(run))
+    do_casting()
 }

@@ -4,22 +4,21 @@ get_ukb <- function(src, exclusion) {
     dplyr::mutate(
       time = t * 0.735,
       ped = "AP",
-      scan = 1L
+      scan = 1L,
     ) |>
     dplyr::collect() |>
     add_run() |>
-    add_ped() |>
     do_casting() |>
     dplyr::anti_join(exclusion, by = dplyr::join_by(sub, ses, task))
 }
 
-get_ukb_exclusion <- function(src = "data/exclusion/ukb_exclusion.tsv") {
+get_ukb_exclusion <- function(src) {
   readr::read_tsv(src, col_types = "cccc") |>
     dplyr::rename(sub = subject_id)
 }
 
 
-get_ukb_design <- function(mat) {
+get_ukb_design <- function() {
   # readr::read_tsv(
   #   "data/ukb/design.mat",
   #   skip = 5,
@@ -45,13 +44,14 @@ get_ukb_design <- function(mat) {
   #     names_to = "Block")
   #
   readr::read_tsv(
-    "https://git.fmrib.ox.ac.uk/falmagro/UK_biobank_pipeline_v_1/-/raw/master/bb_data/task-hariri_events.tsv?inline=false"
+    "https://git.fmrib.ox.ac.uk/falmagro/UK_biobank_pipeline_v_1/-/raw/master/bb_data/task-hariri_events.tsv?inline=false",
+    show_col_types = FALSE
   ) |>
     dplyr::select(onset, duration, type = Stimulus)
 }
 
 
-get_ukb_responses <- function(src = "data/1000513_25748_2_0.txt") {
+get_ukb_responses <- function(src) {
   txt <- rprime::read_eprime(src) |>
     rprime::FrameList()
 
@@ -68,51 +68,52 @@ get_ukb_responses <- function(src = "data/1000513_25748_2_0.txt") {
     dplyr::mutate(
       onset = as.numeric(ExperimenterWindow.OnsetTime),
       onset = onset - min(onset, na.rm = TRUE),
-      onset = onset / 1000
+      onset = onset / 1000,
+      task = "faces/shapes"
     ) |>
     dplyr::filter(Procedure == "TrialsPROC") |>
-    dplyr::select(onset)
+    dplyr::select(onset, task)
 }
 
-get_ukb_demographics <- function() {
-  subses <- arrow::open_dataset(
-    here::here("data/dvars/dataset=ukb"),
-    format = "ipc"
-  ) |>
+get_ukb_demographics <- function(bulk, ukb_source) {
+  subses <- duckplyr::read_parquet_duckdb(ukb_source) |>
     dplyr::distinct(sub, ses) |>
-    dplyr::collect() |>
-    dplyr::mutate(ses = as.character(ses))
+    dplyr::mutate(dplyr::across(
+      tidyselect::all_of(c("sub", "ses")),
+      as.integer
+    )) |>
+    dplyr::collect()
 
-  sites <- arrow::open_dataset(here::here("data/ukb677207_bulk.parquet")) |>
+  sites <- duckplyr::read_parquet_duckdb(bulk) |>
     dplyr::select(
       sub = eid,
       site_2 = f.54.2.0,
-      site_3 = f.54.2.0
+      site_3 = f.54.3.0
     ) |>
-    dplyr::collect() |>
     tidyr::pivot_longer(
       c(tidyselect::ends_with("_2"), tidyselect::ends_with("_3")),
       names_to = "ses",
       values_to = "site",
       names_prefix = "site_"
-    )
+    ) |>
+    dplyr::mutate(ses = as.integer(ses))
 
-  ages <- arrow::open_dataset(here::here("data/ukb677207_bulk.parquet")) |>
+  ages <- duckplyr::read_parquet_duckdb(bulk) |>
     dplyr::select(
       sub = eid,
       age_2 = f.21003.2.0,
       age_3 = f.21003.3.0
     ) |>
-    dplyr::collect() |>
     tidyr::pivot_longer(
       c(tidyselect::ends_with("_2"), tidyselect::ends_with("_3")),
       names_to = "ses",
       values_to = "age",
       names_prefix = "age_",
       values_ptypes = numeric()
-    )
+    ) |>
+    dplyr::mutate(ses = as.integer(ses))
 
-  arrow::open_dataset(here::here("data/ukb677207_bulk.parquet")) |>
+  duckplyr::read_parquet_duckdb(bulk) |>
     dplyr::select(
       sub = eid,
       sex = f.31.0.0,
@@ -128,7 +129,6 @@ get_ukb_demographics <- function() {
       ethnicity = dplyr::if_else(is.na(ethnicity), f.21000.2.0, ethnicity)
     ) |>
     dplyr::select(-tidyselect::starts_with("f.21000")) |>
-    dplyr::collect() |>
     tidyr::pivot_longer(
       c(tidyselect::ends_with("_2"), tidyselect::ends_with("_3")),
       names_to = "ses",
@@ -136,8 +136,9 @@ get_ukb_demographics <- function() {
       names_prefix = "bmi_",
       values_ptypes = numeric()
     ) |>
+    dplyr::mutate(ses = as.integer(ses)) |>
     dplyr::semi_join(subses, by = dplyr::join_by(sub, ses)) |>
     dplyr::left_join(sites, by = dplyr::join_by(sub, ses)) |>
     dplyr::left_join(ages, by = dplyr::join_by(sub, ses)) |>
-    dplyr::mutate(sub = as.character(sub))
+    do_casting()
 }

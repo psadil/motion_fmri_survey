@@ -6,11 +6,11 @@ get_hcp <- function(src, exclusion = NULL) {
     dplyr::mutate(
       time = t * 0.72,
       task = stringr::str_to_lower(task),
-      run = dplyr::case_match(
+      run = dplyr::recode_values(
         task,
         "rest1" ~ 1L,
         "rest2" ~ 2L,
-        .default = run
+        default = run
       ),
       task = dplyr::case_when(
         task == "rest1a" ~ "resta",
@@ -23,7 +23,7 @@ get_hcp <- function(src, exclusion = NULL) {
     ) |>
     do_casting()
 
-  if (stringr::str_detect(src, "openaccess")) {
+  if (stringr::str_detect(src, "hcpya")) {
     out <- readr::read_csv(
       fs::dir_ls(
         here::here("data/sessionSummaryCSV_1200Release"),
@@ -113,7 +113,7 @@ get_hcp <- function(src, exclusion = NULL) {
       ) |>
       dplyr::mutate(ses = "1")
     # https://wiki.humanconnectome.org/docs/HCP%20Data%20Release%20Updates%20Known%20Issues%20and%20Planned%20fixes.html
-  } else if (stringr::str_detect(src, "Aging")) {
+  } else if (stringr::str_detect(src, "hcpa")) {
     out <- get_hcpad_ses("data/hcpa_sessions") |>
       dplyr::right_join(
         dplyr::select(d, -ses),
@@ -191,7 +191,7 @@ get_hcpad_ses <- function(srcs) {
 
 
 get_hcp_design0 <- function(src) {
-  .evs <- fs::dir_ls(src, recurse = TRUE, glob = "*.txt")
+  .evs <- fs::dir_ls(src, recurse = TRUE, glob = "*EVs/*.txt")
   .evs <- .evs[stringr::str_detect(.evs, "Sync", TRUE)]
   lengths <- purrr::map_dbl(.evs, fpeek::peek_count_lines)
   .evs <- .evs[lengths > 0]
@@ -346,12 +346,13 @@ get_hcpya_events <- function(src, hcpya) {
     ) |>
     dplyr::mutate(
       task = stringr::str_to_lower(task)
-    ) |> 
+    ) |>
     dplyr::left_join(
-      dplyr::count(hcpya, task, scan, ped) |> 
+      dplyr::count(hcpya, task, scan, ped) |>
         dplyr::slice_max(order_by = n, n = 1, by = c(task, scan)) |>
         dplyr::select(-n),
-      by = dplyr::join_by(task, ped)) |>
+      by = dplyr::join_by(task, ped)
+    ) |>
     dplyr::mutate(scan = factor(scan, ordered = TRUE))
 }
 
@@ -364,13 +365,11 @@ get_exclude_hcp <- function(path) {
     dplyr::select(sub)
 }
 
-get_hcpya_demographics <- function() {
-  hcpya_un <- readr::read_csv(here::here(
-    "data/unrestricted_martin_2_5_2024_10_18_12.csv"
-  )) |>
+get_hcpya_demographics <- function(hcpya_unrestricted, hcpya_restricted) {
+  hcpya_un <- readr::read_csv(hcpya_unrestricted) |>
     dplyr::select(sub = Subject, gender = Gender)
 
-  readr::read_csv(here::here("data/RESTRICTED_martin_2_5_2024_10_18_28.csv")) |>
+  readr::read_csv(hcpya_restricted) |>
     dplyr::select(
       sub = Subject,
       age = Age_in_Yrs,
@@ -451,7 +450,8 @@ get_hcpya_exclusion <- function(src) {
     dplyr::summarise(n_tr = max(t), .by = c(sub, task, ped)) |>
     dplyr::collect() |>
     dplyr::anti_join(expected) |>
-    dplyr::select(sub, task, ped)
+    dplyr::select(sub, task, ped) |>
+    dplyr::mutate(sub = as.character(sub))
 }
 
 get_hcpd_exclusion <- function(src = "data/exclusion/hcp_dev.csv") {
@@ -465,16 +465,15 @@ get_hcpd_exclusion <- function(src = "data/exclusion/hcp_dev.csv") {
 }
 
 
-get_hcpya_events2 <- function(events, hcpya){
-  
+get_hcpya_events2 <- function(events, hcpya) {
   events |>
     dplyr::mutate(
       task = stringr::str_to_lower(task)
-    ) |> 
+    ) |>
     dplyr::left_join(
-      dplyr::count(hcpya, task, scan, ped) |> 
+      dplyr::count(hcpya, task, scan, ped) |>
         dplyr::slice_max(order_by = n, n = 1, by = c(task, scan)) |>
         dplyr::select(-n),
-      by = dplyr::join_by(task, ped))
+      by = dplyr::join_by(task, ped)
+    )
 }
-

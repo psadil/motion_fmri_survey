@@ -46,7 +46,7 @@ class MotionProcesser(pydantic.BaseModel):
             / f"sub={self.sub_id}"
             / f"ses={self.ses_id}"
             / f"src={self.src_id}"
-            / "motion.arrow"
+            / "motion.parquet"
         )
 
     def process_run(self) -> None:
@@ -62,12 +62,10 @@ class MotionProcesser(pydantic.BaseModel):
                 separator="\t",
                 schema_overrides={"t_indx": pl.Int64},
             )
-            .with_columns(
-                pl.selectors.contains("_x", "_y", "_z").cast(pl.Float64)
-            )
+            .with_columns(pl.selectors.contains("_x", "_y", "_z").cast(pl.Float64))
             .rename({"t_indx": "t"})
             .with_columns(pl.selectors.starts_with("rot") * np.pi / 180)
-            .write_ipc(self.dst, compression="zstd")
+            .write_parquet(self.dst)
         )
 
 

@@ -3,6 +3,11 @@
 .RData
 .Ruserdata
 data/*
+!data/motion/
+data/motion/derivatives/*
+!data/events/
+data/events/derivatives/*
+data/events/*tsv
 /.quarto/
 index*
 Untitled*

@@ -24,6 +24,7 @@ rescale <- function(.data, ...) {
       pxx = dplyr::if_else(pxx > upper, upper, pxx),
       .by = c(...)
     ) |>
+    dplyr::mutate(avg = as.numeric(as.character(avg))) |>
     dplyr::select(-lower, -upper)
 }
 
@@ -38,12 +39,13 @@ rescale <- function(.data, ...) {
 
 .clean <- function(.data, N = 100) {
   .data |>
-    semi_join(count(.data, freq) |> filter(n > N))
+    dplyr::semi_join(dplyr::count(.data, freq) |> dplyr::filter(n > N))
 }
 
 
 get_hcpa_spectrum <- function(src, by_run) {
-  arrow::read_parquet(src) |>
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    do_casting() |>
     dplyr::left_join(
       .avg_by_run(dplyr::filter(by_run, dataset == "hcpa")),
       by = dplyr::join_by(sub)
@@ -53,7 +55,8 @@ get_hcpa_spectrum <- function(src, by_run) {
 }
 
 get_hcpd_spectrum <- function(src, by_run, excluded) {
-  arrow::read_parquet(src) |>
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    do_casting() |>
     dplyr::left_join(
       .avg_by_run(dplyr::filter(by_run, dataset == "hcpd")),
       by = dplyr::join_by(sub)
@@ -68,53 +71,42 @@ get_hcpd_spectrum <- function(src, by_run, excluded) {
 }
 
 get_hcpya_spectrum <- function(src, by_run, excluded) {
-  arrow::read_parquet(src) |>
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    do_casting() |>
     dplyr::left_join(
       .avg_by_run(dplyr::filter(by_run, dataset == "hcpya")),
       by = dplyr::join_by(sub)
     ) |>
     dplyr::filter(!is.na(avg)) |>
-    dplyr::anti_join(excluded) |>
+    dplyr::anti_join(excluded, by = dplyr::join_by(sub, task, ped)) |>
     rescale(task, ped, sub, param)
 }
 
 get_abcd_spectrum <- function(src, by_run, excluded) {
   by_run_abcd <- by_run |>
     dplyr::filter(dataset == "abcd", task == "rest", !filtered) |>
-    dplyr::rename(avg = loc) |>
-    dplyr::anti_join(
-      readr::read_table("data/abcd_exclusion.tsv", show_col_types = FALSE),
-      by = dplyr::join_by(task, ses, sub)
-    ) |>
-    dplyr::summarise(avg = mean(avg), .by = sub)
-  arrow::read_parquet(src) |>
-    dplyr::anti_join(excluded, by = dplyr::join_by(sub, ses, task, run)) |>
-    dplyr::left_join(by_run_abcd) |>
-    dplyr::filter(!is.na(avg)) |>
-    rescale(task, sub, ses, run, param) |>
-    dplyr::mutate(
-      ses = factor(
-        ses,
-        levels = c(
-          "baselineYear1Arm1",
-          "2YearFollowUpYArm1",
-          "4YearFollowUpYArm1"
-        ),
-        ordered = TRUE
-      ),
-      ses = forcats::fct_recode(
-        ses,
-        baseline = "baselineYear1Arm1",
-        Year2 = "2YearFollowUpYArm1",
-        Year4 = "4YearFollowUpYArm1"
-      ) |>
-        forcats::fct_relevel("Year2", after = Inf) |>
-        forcats::fct_relevel("Year4", after = Inf)
-    )
+    dplyr::summarise(avg = median(loc), .by = c(sub, ses))
+
+  unique_ses_src <- duckplyr::read_parquet_duckdb(src) |>
+    dplyr::distinct(ses) |>
+    purrr::pluck("ses")
+  out <- vector("list", length(unique_ses_src))
+  for (i in seq_along(unique_ses_src)) {
+    out[[i]] <- duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+      dplyr::filter(ses == unique_ses_src[i]) |>
+      convert_abcd_ses() |>
+      do_casting() |>
+      dplyr::anti_join(excluded, by = dplyr::join_by(sub, ses, task, run)) |>
+      dplyr::left_join(by_run_abcd, by = dplyr::join_by(sub, ses)) |>
+      dplyr::filter(!is.na(avg)) |>
+      rescale(task, sub, ses, run, param)
+  }
+  dplyr::bind_rows(out)
 }
 
 get_spacetop_spectrum <- function(src, by_run, excluded) {
-  arrow::read_parquet(src) |>
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    do_casting() |>
     dplyr::left_join(
       .avg_by_run(dplyr::filter(by_run, dataset == "spacetop")),
       by = dplyr::join_by(sub)

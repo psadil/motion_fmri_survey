@@ -1,0 +1,11 @@
+#!/bin/bash
+
+ml fsl
+
+mapfile -t niis < <(find /dcs07/smart/data/abcd/rawdata -mindepth 4 -maxdepth 4 -type f -name '*bold.nii*')
+
+for nii in "${niis[@]}"; do
+    dst=$(basename "${nii}")
+    printf "%s\n" "${dst}"
+    fslinfo "${nii}" > abcd/"${dst%%.*}"
+done

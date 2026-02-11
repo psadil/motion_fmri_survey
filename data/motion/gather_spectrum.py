@@ -26,9 +26,7 @@ def get_peaks(d: pl.DataFrame, tr: float, cols: list[str]) -> pl.DataFrame:
                     group.select(cols)
                     .unique()
                     .with_columns(key=1, param=pl.lit(param))
-                    .join(
-                        pl.DataFrame({"freq": x, "pxx": y, "key": 1}), on="key"
-                    )
+                    .join(pl.DataFrame({"freq": x, "pxx": y, "key": 1}), on="key")
                     .drop("key"),
                 )
             except Exception as e:
@@ -36,16 +34,16 @@ def get_peaks(d: pl.DataFrame, tr: float, cols: list[str]) -> pl.DataFrame:
     return pl.concat(peaks)
 
 
-root = Path("rawdata")
-derivatives = Path("derivatives")
+root = Path("derivatives") / "premotion"
+derivatives = Path("derivatives") / "motion"
 
 (
-    pl.scan_ipc(root / "dataset=hcpa")
+    pl.scan_parquet(root / "dataset=hcpa")
     .with_columns(
         ped=pl.col("src").str.extract(r"(AP|PA)"),
-        task=pl.col("src").str.extract(
-            r"(REST1|REST2|CARIT|FACENAME|VISMOTOR)"
-        ),
+        task=pl.col("src")
+        .str.extract(r"(REST1|REST2|CARIT|FACENAME|VISMOTOR)")
+        .str.to_lowercase(),
         sub=pl.col("sub").cast(pl.Utf8),
         ses=pl.col("ses").cast(pl.Utf8),
     )
@@ -57,12 +55,14 @@ derivatives = Path("derivatives")
 
 
 (
-    pl.scan_ipc(root / "dataset=hcpd")
+    pl.scan_parquet(root / "dataset=hcpd")
     .with_columns(
         ped=pl.col("src").str.extract(r"(AP|PA)"),
-        task=pl.col("src").str.extract(
+        task=pl.col("src")
+        .str.extract(
             r"(REST1a|REST1b|REST1|REST2a|REST2b|REST2|CARIT|EMOTION|GUESSING)"
-        ),
+        )
+        .str.to_lowercase(),
         sub=pl.col("sub").cast(pl.Utf8),
         ses=pl.col("ses").cast(pl.Utf8),
     )
@@ -75,13 +75,15 @@ derivatives = Path("derivatives")
 
 
 (
-    pl.scan_ipc(root / "dataset=hcpya")
+    pl.scan_parquet(root / "dataset=hcpya")
     .collect()
     .with_columns(
         ped=pl.col("src").str.extract(r"(LR|RL)"),
-        task=pl.col("src").str.extract(
+        task=pl.col("src")
+        .str.extract(
             r"(REST1|REST2|RELATIONAL|EMOTION|MOTOR|GAMBLING|LANGUAGE|SOCIAL|WM)"
-        ),
+        )
+        .str.to_lowercase(),
         sub=pl.col("sub").cast(pl.Utf8),
         ses=pl.col("ses").cast(pl.Utf8),
     )
@@ -95,7 +97,7 @@ derivatives = Path("derivatives")
 
 # some abcd scans are just way too short
 abcd_too_short = (
-    pl.scan_ipc(root / "dataset=abcd")
+    pl.scan_parquet(root / "dataset=abcd")
     .with_columns(
         task=pl.col("src").str.extract(r"(rest|mid|sst|nback)"),
         run=pl.col("src").str.extract(r"run-(\d+)"),
@@ -107,7 +109,7 @@ abcd_too_short = (
 )
 
 (
-    pl.scan_ipc(root / "dataset=abcd")
+    pl.scan_parquet(root / "dataset=abcd")
     .with_columns(
         task=pl.col("src").str.extract(r"(rest|mid|sst|nback)"),
         run=pl.col("src").str.extract(r"run-(\d+)"),
@@ -120,7 +122,7 @@ abcd_too_short = (
 )
 
 (
-    pl.scan_ipc(root / "dataset=ukb")
+    pl.scan_parquet(root / "dataset=ukb")
     .with_columns(
         task=pl.when(pl.col("src") == 20227)
         .then(pl.lit("rest"))
@@ -137,10 +139,7 @@ abcd_too_short = (
 
 # spacetop
 tsvs = []
-for subdir in (
-    Path("sourcedata")
-    / "dcs04/smart/data/spatialtopology/fmriprep/results/fmriprep"
-).glob("sub*"):
+for subdir in Path("/dcs07/smart/data/SpatialTopology/ds005256-fmriprep").glob("sub*"):
     print(subdir)
     sub = re.findall(r"(?<=sub-)\d{4}", subdir.name)
     for sesdir in subdir.glob("ses*"):

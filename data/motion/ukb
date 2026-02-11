@@ -1,0 +1,42 @@
+#!/bin/bash
+#SBATCH --job-name=motion_ukb
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+#SBATCH --time=0:30:00
+#SBATCH --array=0-9294
+#SBATCH --output motion_ukb_%a-4.log
+#SBATCH --constraint="intel&(haswell|broadwell|cascadelake)"
+
+# TODO: finish last 20k or so
+
+module load singularity
+
+dataset=ukb
+
+# grep "MaxArraySize=" /etc/slurm/slurm.conf
+MaxArraySize=10000
+BATCH=4
+
+JOBIDX=$(( SLURM_ARRAY_TASK_ID + MaxArraySize * BATCH ))
+
+singularity run \
+  -e \
+  --env POLARS_MAX_THREADS=1 \
+  --bind $PWD \
+  --bind /dcs07/smart/data/${dataset}/rawdata \
+  docker://psadil/motion:240919 \
+  python ${PWD}/${dataset}_motion.py \
+  "${JOBIDX}" ${PWD}/${dataset}_srcs ${MYSCRATCH}/motion/"dataset=${dataset}"
+
+
+while read sub; do
+    echo ${sub}
+    for ses in ${sub}/ses*; do
+        for datatype in 20249 20227; do
+            ls ${ses}/non-bids/${datatype}/fMRI/*MRI*/mc/*mcf* >> ukb_motion_files
+        done
+    done
+done < ukb_srcs
+
