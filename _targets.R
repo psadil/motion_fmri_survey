@@ -364,10 +364,21 @@ list(
     format = "file"
   ),
   tar_target(
-    all_motion_exclusion,
+    fig_all_motion_exclusion,
     write_png(
       make_fig_all_motion_exclusion(lost = lost),
       "figures/all_motion_exclusion.png",
+      width = 6.5,
+      height = 6.5
+    ),
+    packages = c("patchwork"),
+    format = "file"
+  ),
+  tar_target(
+    fig_all_motion_exclusion2,
+    write_png(
+      make_fig_all_motion_exclusion(lost = lost, filtered = TRUE),
+      "figures/all_motion_exclusion_filtered.png",
       width = 6.5,
       height = 6.5
     ),

@@ -774,7 +774,7 @@ make_fig_all_motion_exclusion <- function(
     ggplot2::ggplot(ggplot2::aes(y = task, x = lost)) +
     ggplot2::facet_grid(ses ~ type, scales = "free_y") +
     ggplot2::geom_col(
-      aes(fill = scan),
+      ggplot2::aes(fill = scan),
       position = ggplot2::position_dodge(preserve = "single")
     ) +
     ggplot2::geom_errorbar(

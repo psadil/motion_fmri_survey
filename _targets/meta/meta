@@ -85,6 +85,8 @@ fig_by_time_spacetop|stem|30f4c91aef5a8c7e|6cec55511a099d1c|7398c890a729c0bc|185
 fig_by_time_hcpya_file|stem|999efabd6c106123|f0778c11b29ecbda|acc71ebb4a248ebb|624637758|figures/by-time-hcpya.png|t20495.6875939363s|s443173b|443173|file|local|vector|||1.553||
 fig_by_time_hcpa|stem|85729e79cafc4abe|874b5c69efeac016|ad169e903a62d3c9|1638654678|figures/by-time-hcpa.png|t20495.6876065099s|s272545b|272545|file|local|vector|||0.999||
 fig_by_time_hcpd|stem|f672671ca9bd39c0|5f5433a62864d194|c252de9f75ec894e|-926394949|figures/by-time-hcpd.png|t20495.6879438018s|s315190b|315190|file|local|vector|||1.255||
+fig_by_time_abcd|stem|564d98d98dc2de60|0b64343f06d7e077|86896cd0b6e099e5|-246067219|figures/by-time-abcd.png|t20495.6893826859s|s213776b|213776|file|local|vector|||0.485||
+fig_by_time_ukb|stem|eb1ab2e8128d266a|67fa38a97f6b3169|f1106cf4afbb4a11|1524440100|figures/by-time-ukb.png|t20495.6893870151s|s68751b|68751|file|local|vector|||0.341||
 get_qcs_gold|function|b6000b9574cc14d4
 .summarize_by_max|function|ebb0145430892e98
 convert_abcd_ses|function|61f82641c78fcca7
@@ -122,7 +124,7 @@ get_qcs_gold_hcpya|function|74c7efdc88cce945
 factorize_ses|function|52e866fd2ab8d0ce
 get_cor_by_thresh|function|967deb0d13114f8a
 summarise_by_time|function|da298b5dd090a78f
-make_fig_all_motion_exclusion|function|80039a428f644014
+make_fig_all_motion_exclusion|function|78b8f40c10720d52
 make_fig_by_time_ukb|function|03a62e812b232965
 get_qc_fd_hcpya|function|56ea83d49e1b2b0d
 get_cor_by_thresh_hcpya|function|18c9a54f01e95d07
@@ -181,5 +183,5 @@ get_hcp_aging_demographics|function|47c950c9e7aad480
 get_cor_by_thresh_hcpya_gold|function|d687b3fd5fc67828
 get_abcd_exclusion|function|c3d7b7d3505fa30e
 make_fig_demographics|function|80fe4bea1653a5e7
-fig_by_time_abcd|stem|564d98d98dc2de60|0b64343f06d7e077|86896cd0b6e099e5|-246067219|figures/by-time-abcd.png|t20495.6893826859s|s213776b|213776|file|local|vector|||0.485||
-fig_by_time_ukb|stem|eb1ab2e8128d266a|67fa38a97f6b3169|f1106cf4afbb4a11|1524440100|figures/by-time-ukb.png|t20495.6893870151s|s68751b|68751|file|local|vector|||0.341||
+fig_all_motion_exclusion2|stem|42face5b6670adbb|6b473c4e6ea279b7|d351988741dc6a56|160012380|figures/all_motion_exclusion_filtered.png|t20495.8646071561s|s201065b|201065|file|local|vector|||1.401||
+fig_all_motion_exclusion|stem|37c9316a96144bc1|bebd8aa30226c2b2|d351988741dc6a56|228950836|figures/all_motion_exclusion.png|t20495.8646217433s|s201675b|201675|file|local|vector|||1.247||
