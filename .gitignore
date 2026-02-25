@@ -8,6 +8,8 @@ data/motion/derivatives/*
 !data/events/
 data/events/derivatives/*
 data/events/*tsv
+!data/ukb-schaefer/*py
+!data/ukb-schaefer/run*
 /.quarto/
 index*
 Untitled*

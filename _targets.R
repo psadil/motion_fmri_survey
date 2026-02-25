@@ -1,4 +1,5 @@
 library(targets)
+library(tarchetypes)
 library(crew)
 
 source("R/hcp.R")
@@ -10,10 +11,12 @@ source("R/utils.R")
 source("R/spectrum.R")
 source("R/qc.R")
 source("R/figures.R")
+source("R/cost.R")
 
 targets::tar_option_set(
   trust_timestamps = TRUE,
-  format = "parquet"
+  format = "parquet",
+  controller = crew::crew_controller_local(workers = 4)
 )
 
 
@@ -406,5 +409,77 @@ list(
     ),
     packages = c("patchwork"),
     format = "file"
+  ),
+  tar_target(
+    lost_strict2,
+    get_lost_strict_for_modeling(datasets, by_run = by_run),
+    pattern = map(datasets)
+  ),
+  tar_target(
+    params,
+    list(k0 = 0.3025303, k1 = 164.3939, k2 = 7128.788),
+    format = "qs"
+  ),
+  tar_target(cost_plot, plot_cost(by_run), format = "qs"),
+  tar_target(cost_lost_plot, plot_cost_lost(by_run), format = "qs"),
+  tar_target(
+    acc_decrease_plot,
+    plot_acc_decrease(by_run, params = params),
+    format = "qs"
+  ),
+  tar_target(
+    fig_cost,
+    write_png(
+      make_fig_cost(cost_plot, cost_lost_plot, acc_decrease_plot),
+      "figures/cost.png",
+      width = 6,
+      height = 3
+    ),
+    format = "file",
+    packages = "patchwork"
+  ),
+  tar_target(key_measures, get_key_measures(), format = "qs"),
+  tar_target(performance_src, "data/performance", format = "file"),
+  tar_target(performance, get_performance(performance_src)),
+  tar_target(
+    fig_performance,
+    write_png(
+      make_fig_performance(performance, key_measures),
+      "figures/performance.png",
+      width = 6,
+      height = 5.5
+    ),
+    packages = "patchwork",
+    format = "file"
+  ),
+  tar_target(
+    fig_power,
+    write_png(
+      make_fig_power(by_run, lost),
+      "figures/power.png",
+      width = 6,
+      height = 3
+    ),
+    format = "file"
+  ),
+  tar_target(timeseries_src, "data/Schaefer7n100p.parquet", format = "file"),
+  tar_target(
+    ukb_subs,
+    get_ukb_subs(by_run, timeseries_src, n = 50),
+    format = "qs"
+  ),
+  tar_target(
+    qc_fd_ukb,
+    get_qc_fd_ukb(ukb, sub_id = ukb_subs, n_iter = 100),
+    pattern = map(ukb_subs)
+  ),
+  tarchetypes::tar_group_by(qc_fd_ukb2, qc_fd_ukb, sub, iter),
+  tar_target(
+    qc_ukb,
+    get_cor_by_thresh(
+      d = dplyr::select(qc_fd_ukb2, -tar_group),
+      timeseries_src = timeseries_src
+    ),
+    pattern = head(map(qc_fd_ukb2), 100)
   )
 )

@@ -1015,3 +1015,125 @@ make_fig_lost_by_group <- function(by_run, demographics, base_size = 10) {
     patchwork::plot_layout(nrow = 2) +
     patchwork::plot_annotation(tag_levels = "a", tag_suffix = ")")
 }
+
+make_fig_cost <- function(cost_plot, cost_lost_plot, acc_decrease_plot) {
+  cost_plot +
+    cost_lost_plot +
+    acc_decrease_plot +
+    patchwork::plot_layout(guides = "collect", ncol = 3) +
+    patchwork::plot_annotation(tag_levels = "a", tag_suffix = ")") &
+    ggplot2::theme_minimal(base_size = 9) +
+      ggplot2::theme(legend.position = "bottom")
+}
+
+make_fig_performance <- function(d, key_measures) {
+  d_params <- d |>
+    dplyr::filter(measure %in% key_measures) |>
+    dplyr::filter(stringr::str_detect(measure, "AgeAdj", TRUE)) |>
+    dplyr::group_nest(measure, low) |>
+    dplyr::mutate(
+      fit = purrr::map(
+        data,
+        ~ gslnls::gsl_nls(
+          r ~ k0 * sqrt(1 / (1 + k1 / nsub + k2 / (nsub * length))),
+          data = .x,
+          start = list(k0 = 0.5, k1 = 0.5, k2 = 0.5),
+          lower = c(k0 = 0, k1 = 0, k2 = 0),
+          algorithm = "lmaccel",
+        ) |>
+          broom::tidy()
+      )
+    ) |>
+    dplyr::select(-data) |>
+    tidyr::unnest(fit) |>
+    dplyr::select(-statistic, -p.value, -std.error) |>
+    tidyr::pivot_wider(names_from = term, values_from = estimate)
+
+  tmp <- d |>
+    dplyr::filter(measure %in% key_measures) |>
+    dplyr::left_join(d_params, by = dplyr::join_by(measure, low)) |>
+    dplyr::mutate(
+      y_hat = model(k0, k1, k2, nsub, length = length),
+      nsub = factor(nsub),
+      total = total / 60,
+      measure = stringr::str_remove(measure, "_Unadj"),
+      measure = stringr::str_remove(measure, "_Score"),
+      measure = stringr::str_replace_all(measure, "_", "\n"),
+      measure = dplyr::replace_values(
+        measure,
+        # these are the 18 that showed a good fit with their model
+        "CardSort" ~ "Card\nSort",
+        "PMAT24\nA\nCR" ~ "PMAT\nA\nCR",
+        "ReadEng" ~ "Read",
+        "LifeSatisf" ~ "Life\nSatisf",
+        "PicVocab" ~ "Pic\nVocab",
+        "ProcSpeed" ~ "Proc\nSpeed",
+        "Emotion\nTask\nFace\nAcc" ~ "Emot.\nTask\nAcc",
+        "Language\nTask\nStory\nAvg\nDifficulty\nLevel" ~ "Lng\nTask\nAvg\nDiff.",
+        "Relational\nTask\nAcc" ~ "Rel.\nTask\nAcc"
+      )
+    )
+  measures <- unique(tmp$measure)[1:9]
+
+  a <- tmp |>
+    dplyr::filter(measure %in% measures) |>
+    ggplot2::ggplot(ggplot2::aes(x = total, y = r, color = nsub)) +
+    ggplot2::facet_grid(measure ~ low) +
+    ggplot2::geom_point(alpha = 0.2) +
+    ggplot2::geom_line(ggplot2::aes(y = y_hat)) +
+    ggplot2::scale_color_viridis_d("N Training\nSubs", option = "turbo") +
+    ggplot2::xlab("Total Scan Time (Hours)") +
+    ggplot2::scale_y_continuous(
+      "Model Performance (Correlation)",
+      breaks = c(0, 0.1),
+      labels = c(0, 0.1)
+    )
+
+  b <- tmp |>
+    dplyr::filter(!(measure %in% measures)) |>
+    ggplot2::ggplot(ggplot2::aes(x = total, y = r, color = nsub)) +
+    ggplot2::facet_grid(measure ~ low) +
+    ggplot2::geom_point(alpha = 0.2) +
+    ggplot2::geom_line(ggplot2::aes(y = y_hat)) +
+    ggplot2::scale_color_viridis_d("N Training\nSubs", option = "turbo") +
+    ggplot2::xlab("Total Scan Time (Hours)") +
+    ggplot2::scale_y_continuous(
+      "Model Performance (Correlation)",
+      breaks = c(0, 0.1),
+      labels = c(0, 0.1)
+    )
+
+  a +
+    b +
+    patchwork::plot_layout(guides = "collect") &
+    ggplot2::theme_minimal(base_size = 9) +
+      ggplot2::theme(legend.position = "bottom")
+}
+
+make_fig_power <- function(by_run, lost) {
+  by_run |>
+    dplyr::filter(scan == 1, task == "rest") |>
+    dplyr::count(dataset, ses, task, scan, filtered) |>
+    dplyr::left_join(lost) |>
+    dplyr::mutate(nn = n * (1 - lost)) |>
+    dplyr::rename(none = n, Filtered = filtered) |>
+    dplyr::select(-lower, -upper, -prop, -max, -avg, -lost) |>
+    tidyr::pivot_wider(names_from = type, values_from = nn) |>
+    tidyr::pivot_longer(none:strict, values_to = "n") |>
+    dplyr::mutate(
+      p = pwr::pwr.r.test(n = n, r = 0.1)$power,
+      dataset = stringr::str_to_upper(dataset),
+      ses = stringr::str_replace(ses, "^[[:digit:]]+", " "),
+      name = factor(name, levels = c("none", "lenient", "strict"))
+    ) |>
+    ggplot2::ggplot(ggplot2::aes(x = name, y = p)) +
+    ggplot2::geom_col(ggplot2::aes(fill = Filtered), position = "dodge") +
+    ggplot2::facet_wrap(~ dataset + ses, nrow = 2) +
+    ggplot2::scale_fill_viridis_d(option = "turbo") +
+    ggplot2::ylab("Statistical Power") +
+    ggplot2::xlab("FD Threshold") +
+    ggplot2::theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.9, 0.1)
+    )
+}

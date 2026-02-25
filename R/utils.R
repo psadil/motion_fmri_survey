@@ -420,3 +420,32 @@ write_tikz <- function(p, file, width, height) {
   )
   file
 }
+
+
+get_lost_strict_for_modeling <- function(
+  dataset,
+  by_run,
+  prop_thresh = 0.2,
+  mfd_thresh = 0.25,
+  max_fd_thresh = 5
+) {
+  by_prop <- .summarize_by_prop(dataset, threshold = 0.2) |>
+    dplyr::mutate(exclude = lost > prop_thresh) |>
+    dplyr::distinct(dataset, task, ses, sub, scan, filtered, exclude)
+
+  by_max <- .summarize_by_max(dataset) |>
+    dplyr::mutate(exclude = max_fd > max_fd_thresh) |>
+    dplyr::distinct(dataset, task, ses, sub, scan, filtered, exclude)
+
+  by_avg <- by_run |>
+    dplyr::mutate(exclude = loc > mfd_thresh) |>
+    dplyr::distinct(dataset, task, ses, sub, scan, filtered, exclude)
+
+  dplyr::bind_rows(
+    list(max = by_max, avg = by_avg, prop = by_prop),
+    .id = "how"
+  ) |>
+    tidyr::pivot_wider(names_from = how, values_from = exclude) |>
+    dplyr::mutate(exclude = max | avg | prop) |>
+    dplyr::select(dataset, task, ses, sub, scan, filtered, exclude)
+}

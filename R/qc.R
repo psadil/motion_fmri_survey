@@ -97,40 +97,6 @@ get_qc_src_hcpya <- function(
     dplyr::select(-sub, -loc)
 }
 
-get_cor_by_thresh <- function(d, window_width = 150) {
-  n_tr <- dplyr::n_distinct(d$t)
-
-  d |>
-    tidyr::crossing(window_start = seq_len(n_tr - window_width) - 1) |>
-    dplyr::select(-t) |>
-    dplyr::group_nest(sub, ses, filtered, iter, window_start) |>
-    dplyr::mutate(
-      data = purrr::map2(
-        data,
-        window_start,
-        ~ .x |>
-          dplyr::slice_min(
-            order_by = framewise_displacement,
-            n = .y + window_width,
-            with_ties = FALSE
-          ) |>
-          dplyr::arrange(framewise_displacement) |>
-          dplyr::slice_tail(n = window_width)
-      ),
-      max_fd = purrr::map_dbl(data, ~ max(.x$framewise_displacement)),
-      data = purrr::map(
-        data,
-        ~ .x |>
-          dplyr::select(-framewise_displacement) |>
-          corrr::correlate(quiet = TRUE) |>
-          corrr::shave() |>
-          corrr::stretch() |>
-          na.omit()
-      )
-    ) |>
-    tidyr::unnest(data)
-}
-
 
 get_cor_by_thresh_hcpya <- function(
   d,
@@ -403,4 +369,102 @@ get_qc_gold <- function(qcs) {
       r = mean(r),
       .by = c(x, y, filtered, sub, ses)
     )
+}
+
+get_ukb_subs <- function(
+  by_run,
+  timeseries_src,
+  n = 50,
+  quantile_range = c(0.5, 0.95)
+) {
+  timeseries <- duckplyr::read_parquet_duckdb(timeseries_src) |>
+    dplyr::distinct(sub) |>
+    dplyr::collect()
+
+  by_run |>
+    dplyr::filter(dataset == "ukb", ses == "2", task == "rest", !filtered) |>
+    dplyr::mutate(sub = as.numeric(sub)) |>
+    dplyr::semi_join(timeseries, by = dplyr::join_by(sub)) |>
+    dplyr::filter(
+      dplyr::between(
+        loc,
+        quantile(loc, quantile_range[1]),
+        quantile(loc, quantile_range[2])
+      )
+    ) |>
+    dplyr::distinct(sub) |>
+    dplyr::slice_head(n = n) |>
+    purrr::pluck("sub")
+}
+
+get_qc_fd_ukb <- function(ukb, sub_id, n_iter = 250) {
+  fd <- ukb |>
+    dplyr::filter(ses == "2", task == "rest") |>
+    dplyr::mutate(sub = as.numeric(sub)) |>
+    dplyr::filter(sub == sub_id) |>
+    dplyr::select(sub, t, tidyselect::starts_with("frame")) |>
+    tidyr::pivot_longer(
+      tidyselect::starts_with("frame"),
+      names_to = "filtered",
+      values_to = "framewise_displacement"
+    ) |>
+    dplyr::mutate(filtered = stringr::str_detect(filtered, "filt"))
+
+  fd |>
+    tidyr::crossing(iter = seq_len(n_iter)) |>
+    dplyr::group_nest(sub, iter, filtered) |>
+    dplyr::mutate(
+      data = purrr::map(
+        data,
+        ~ .x |>
+          dplyr::mutate(framewise_displacement = sample(framewise_displacement))
+      )
+    ) |>
+    tidyr::unnest(data) |>
+    dplyr::bind_rows(dplyr::mutate(fd, iter = 0))
+}
+
+
+get_cor_by_thresh <- function(d, timeseries_src, window_width = 150) {
+  n_tr <- dplyr::n_distinct(d$t)
+  sub_id <- unique(d$sub)
+  checkmate::assert_numeric(sub_id, len = 1)
+
+  timeseries <- duckplyr::read_parquet_duckdb(
+    timeseries_src,
+    prudence = "lavish"
+  ) |>
+    dplyr::filter(sub == sub_id) |>
+    dplyr::collect()
+
+  d |>
+    dplyr::left_join(timeseries, by = dplyr::join_by(sub, t)) |>
+    na.omit() |> # some participants have na in some trs (atypically long runs)
+    dplyr::select(-t) |>
+    tidyr::crossing(window_start = seq_len(n_tr - window_width) - 1) |>
+    dplyr::group_nest(sub, filtered, iter, window_start) |>
+    dplyr::mutate(
+      data = purrr::map2(
+        data,
+        window_start,
+        ~ .x |>
+          dplyr::slice_min(
+            order_by = framewise_displacement,
+            n = .y + window_width,
+            with_ties = FALSE
+          ) |>
+          dplyr::arrange(framewise_displacement) |>
+          dplyr::slice_tail(n = window_width)
+      ),
+      max_fd = purrr::map_dbl(data, ~ max(.x$framewise_displacement)),
+      data = purrr::map(
+        data,
+        ~ .x |>
+          dplyr::select(-framewise_displacement) |>
+          corrr::correlate(quiet = TRUE) |>
+          corrr::shave() |>
+          corrr::stretch(na.rm = TRUE, remove.dups = TRUE)
+      )
+    ) |>
+    tidyr::unnest(data)
 }
