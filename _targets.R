@@ -16,7 +16,7 @@ source("R/cost.R")
 targets::tar_option_set(
   trust_timestamps = TRUE,
   format = "parquet",
-  controller = crew::crew_controller_local(workers = 4)
+  controller = crew::crew_controller_local(workers = 6)
 )
 
 
@@ -462,10 +462,10 @@ list(
     ),
     format = "file"
   ),
-  tar_target(timeseries_src, "data/Schaefer7n100p.parquet", format = "file"),
+  tar_target(timeseries_src, "data/timeseries", format = "file"),
   tar_target(
     ukb_subs,
-    get_ukb_subs(by_run, timeseries_src, n = 50),
+    get_ukb_subs(by_run, timeseries_src, n = 10),
     format = "qs"
   ),
   tar_target(
@@ -473,13 +473,43 @@ list(
     get_qc_fd_ukb(ukb, sub_id = ukb_subs, n_iter = 100),
     pattern = map(ukb_subs)
   ),
+  tar_target(qc_fd_ukb_real, dplyr::filter(qc_fd_ukb, iter == 0)),
   tarchetypes::tar_group_by(qc_fd_ukb2, qc_fd_ukb, sub, iter),
+  tar_target(type_id, c("clean", "raw"), format = "qs"), # for ukb timeseries
   tar_target(
     qc_ukb,
     get_cor_by_thresh(
       d = dplyr::select(qc_fd_ukb2, -tar_group),
+      timeseries_src = timeseries_src,
+      type_id = type_id
+    ),
+    pattern = cross(map(qc_fd_ukb2), type_id)
+  ),
+  tar_target(
+    qc_ukb_summary,
+    get_cor_by_thresh_summary(
+      qc_ukb,
+      real = qc_fd_ukb_real,
       timeseries_src = timeseries_src
     ),
-    pattern = head(map(qc_fd_ukb2), 100)
+    pattern = map(qc_ukb)
+  ),
+  tar_target(
+    qc_ukb2,
+    get_cor_by_thresh2(
+      d = dplyr::select(qc_fd_ukb2, -tar_group),
+      timeseries_src = timeseries_src,
+      type_id = type_id
+    ),
+    pattern = cross(map(qc_fd_ukb2), type_id)
+  ),
+  tar_target(
+    qc_ukb_summary2,
+    get_cor_by_thresh_summary2(
+      qc_ukb2,
+      real = qc_fd_ukb_real,
+      timeseries_src = timeseries_src
+    ),
+    pattern = map(qc_ukb2)
   )
 )

@@ -232,35 +232,6 @@ get_qcs_gold <- function(d) {
 }
 
 
-get_cor_by_thresh2 <- function(qcs, gold) {
-  qcs |>
-    dplyr::left_join(gold, by = dplyr::join_by(x, y, filtered, sub, ses)) |>
-    dplyr::mutate(r = r.x - r.y) |>
-    dplyr::summarise(
-      r = median(r),
-      .by = c(window_start, max_fd, iter, filtered, sub, ses)
-    )
-}
-
-get_cor_by_thresh3 <- function(qcs, gold) {
-  qcs |>
-    dplyr::left_join(gold, by = dplyr::join_by(x, y, filtered, sub, ses)) |>
-    dplyr::summarise(
-      r = cor(r.x, r.y),
-      .by = c(window_start, max_fd, iter, filtered, sub, ses)
-    )
-}
-
-get_cor_by_thresh3_hcpya <- function(qcs, gold) {
-  qcs |>
-    dplyr::left_join(gold, by = dplyr::join_by(x, y, filtered, sub, cleaned)) |>
-    dplyr::summarise(
-      r = cor(r.x, r.y),
-      .by = c(window_start, max_fd, iter, filtered, sub, cleaned)
-    )
-}
-
-
 get_ukb_qc <- function(ukb) {
   ukb |>
     dplyr::filter(ses == "2") |>
@@ -385,13 +356,13 @@ get_ukb_subs <- function(
     dplyr::filter(dataset == "ukb", ses == "2", task == "rest", !filtered) |>
     dplyr::mutate(sub = as.numeric(sub)) |>
     dplyr::semi_join(timeseries, by = dplyr::join_by(sub)) |>
-    dplyr::filter(
-      dplyr::between(
-        loc,
-        quantile(loc, quantile_range[1]),
-        quantile(loc, quantile_range[2])
-      )
-    ) |>
+    # dplyr::filter(
+    #   dplyr::between(
+    #     loc,
+    #     quantile(loc, quantile_range[1]),
+    #     quantile(loc, quantile_range[2])
+    #   )
+    # ) |>
     dplyr::distinct(sub) |>
     dplyr::slice_head(n = n) |>
     purrr::pluck("sub")
@@ -425,46 +396,223 @@ get_qc_fd_ukb <- function(ukb, sub_id, n_iter = 250) {
 }
 
 
-get_cor_by_thresh <- function(d, timeseries_src, window_width = 150) {
+get_cor_by_thresh <- function(d, timeseries_src, type_id, window_width = 150) {
   n_tr <- dplyr::n_distinct(d$t)
   sub_id <- unique(d$sub)
   checkmate::assert_numeric(sub_id, len = 1)
 
-  timeseries <- duckplyr::read_parquet_duckdb(
-    timeseries_src,
-    prudence = "lavish"
-  ) |>
-    dplyr::filter(sub == sub_id) |>
-    dplyr::collect()
-
-  d |>
-    dplyr::left_join(timeseries, by = dplyr::join_by(sub, t)) |>
-    na.omit() |> # some participants have na in some trs (atypically long runs)
-    dplyr::select(-t) |>
-    tidyr::crossing(window_start = seq_len(n_tr - window_width) - 1) |>
-    dplyr::group_nest(sub, filtered, iter, window_start) |>
+  timeseries <- duckplyr::read_parquet_duckdb(timeseries_src) |>
+    dplyr::filter(sub == sub_id, type == type_id) |>
+    na.omit()
+  if (window_width == n_tr) {
+    dd <- d |>
+      dplyr::mutate(window_start = 0)
+  } else {
+    dd <- d |>
+      tidyr::crossing(window_start = seq(0, n_tr - window_width - 1, by = 10))
+  }
+  dd |>
     dplyr::mutate(
-      data = purrr::map2(
-        data,
+      t2 = rank(framewise_displacement),
+      .by = c(sub, filtered, iter, window_start)
+    ) |>
+    dplyr::filter(
+      dplyr::between(
+        t2,
         window_start,
-        ~ .x |>
-          dplyr::slice_min(
-            order_by = framewise_displacement,
-            n = .y + window_width,
-            with_ties = FALSE
-          ) |>
-          dplyr::arrange(framewise_displacement) |>
-          dplyr::slice_tail(n = window_width)
-      ),
-      max_fd = purrr::map_dbl(data, ~ max(.x$framewise_displacement)),
+        window_start + window_width - 1
+      )
+    ) |>
+    dplyr::select(-t2) |>
+    dplyr::left_join(timeseries, by = dplyr::join_by(sub, t)) |>
+    dplyr::mutate(
+      max_fd = max(framewise_displacement),
+      .by = c(sub, filtered, iter, window_start)
+    ) |>
+    dplyr::group_nest(sub, filtered, iter, window_start, max_fd) |>
+    dplyr::mutate(
       data = purrr::map(
         data,
         ~ .x |>
-          dplyr::select(-framewise_displacement) |>
+          dplyr::select(-framewise_displacement, -t) |>
           corrr::correlate(quiet = TRUE) |>
           corrr::shave() |>
           corrr::stretch(na.rm = TRUE, remove.dups = TRUE)
       )
     ) |>
-    tidyr::unnest(data)
+    tidyr::unnest(data) |>
+    dplyr::mutate(type = type_id) |>
+    dplyr::mutate(dplyr::across(
+      c(x, y),
+      ~ stringr::str_remove(.x, "niftispheresmasker") |> as.integer()
+    ))
+}
+
+get_cor_by_thresh_summary <- function(
+  d,
+  real,
+  timeseries_src,
+  gold_window = 180
+) {
+  sub_id <- unique(d$sub)
+  type_id <- unique(d$type)
+  checkmate::assert_numeric(sub_id, len = 1)
+  checkmate::assert_character(type_id, len = 1)
+
+  gold0 <- real |>
+    dplyr::filter(sub == sub_id) |>
+    dplyr::slice_min(
+      order_by = framewise_displacement,
+      n = gold_window,
+      with_ties = FALSE,
+      by = filtered
+    )
+
+  gold_f <- get_cor_by_thresh(
+    d = dplyr::filter(gold0, filtered),
+    timeseries_src = timeseries_src,
+    window_width = gold_window,
+    type_id = type_id
+  )
+  gold_nf <- get_cor_by_thresh(
+    d = dplyr::filter(gold0, !filtered),
+    timeseries_src = timeseries_src,
+    window_width = gold_window,
+    type_id = type_id
+  )
+
+  gold <- dplyr::bind_rows(gold_f, gold_nf) |>
+    dplyr::select(-max_fd, -iter, -window_start)
+
+  power <- readr::read_csv(
+    "data/power_2011.csv",
+    col_select = c("X", "Y", "Z"),
+    show_col_types = FALSE
+  ) |>
+    dist() |>
+    as.matrix() |>
+    corrr::as_cordf() |>
+    corrr::shave() |>
+    corrr::stretch(na.rm = TRUE) |>
+    dplyr::filter(dplyr::between(r, 30, 50)) |>
+    dplyr::select(-r) |>
+    dplyr::mutate(dplyr::across(tidyselect::everything(), as.integer))
+
+  d |>
+    dplyr::semi_join(power, by = dplyr::join_by(x, y)) |>
+    dplyr::left_join(gold, by = dplyr::join_by(sub, x, y, type, filtered)) |>
+    dplyr::mutate(dplyr::across(tidyselect::starts_with("r."), atanh)) |>
+    dplyr::summarise(
+      avg = mean(r.x - r.y),
+      mse = mean((r.x - r.y)^2),
+      mad = mad(r.x - r.y),
+      product_moment_cor = cor(r.x, r.y),
+      rank_cor = cor(r.x, r.y, method = "spear"),
+      v = var(r.x - r.y),
+      .by = c(sub, filtered, window_start, max_fd, iter, type)
+    )
+}
+
+get_cor_by_thresh2 <- function(d, timeseries_src, type_id, window_width = 150) {
+  n_tr <- dplyr::n_distinct(d$t)
+  sub_id <- unique(d$sub)
+  checkmate::assert_numeric(sub_id, len = 1)
+
+  timeseries <- duckplyr::read_parquet_duckdb(timeseries_src) |>
+    dplyr::filter(sub == sub_id, type == type_id) |>
+    na.omit()
+
+  d |>
+    tidyr::crossing(window_end = seq(window_width, n_tr)) |>
+    dplyr::mutate(
+      t2 = rank(framewise_displacement),
+      .by = c(sub, filtered, iter, window_end)
+    ) |>
+    dplyr::filter(dplyr::between(t2, 0, window_end)) |>
+    dplyr::select(-t2) |>
+    dplyr::left_join(timeseries, by = dplyr::join_by(sub, t)) |>
+    dplyr::mutate(
+      max_fd = max(framewise_displacement),
+      .by = c(sub, filtered, iter, window_end)
+    ) |>
+    dplyr::group_nest(sub, filtered, iter, window_end, max_fd) |>
+    dplyr::mutate(
+      data = purrr::map(
+        data,
+        ~ .x |>
+          dplyr::select(-framewise_displacement, -t) |>
+          corrr::correlate(quiet = TRUE) |>
+          corrr::shave() |>
+          corrr::stretch(na.rm = TRUE, remove.dups = TRUE)
+      )
+    ) |>
+    tidyr::unnest(data) |>
+    dplyr::mutate(type = type_id) |>
+    dplyr::mutate(dplyr::across(
+      c(x, y),
+      ~ stringr::str_remove(.x, "niftispheresmasker") |> as.integer()
+    ))
+}
+
+get_cor_by_thresh_summary2 <- function(
+  d,
+  real,
+  timeseries_src
+) {
+  sub_id <- unique(d$sub)
+  type_id <- unique(d$type)
+
+  if (length(sub_id) == 0) {
+    return(tibble::tibble())
+  }
+
+  checkmate::assert_numeric(sub_id, len = 1)
+  checkmate::assert_character(type_id, len = 1)
+
+  full <- real |>
+    dplyr::filter(sub == sub_id)
+
+  gold_f <- get_cor_by_thresh(
+    d = dplyr::filter(full, filtered),
+    timeseries_src = timeseries_src,
+    window_width = dplyr::n_distinct(full$t),
+    type_id = type_id
+  )
+  gold_nf <- get_cor_by_thresh(
+    d = dplyr::filter(full, !filtered),
+    timeseries_src = timeseries_src,
+    window_width = dplyr::n_distinct(full$t),
+    type_id = type_id
+  )
+
+  gold <- dplyr::bind_rows(gold_f, gold_nf) |>
+    dplyr::select(-max_fd, -iter, -window_start)
+
+  power <- readr::read_csv(
+    "data/power_2011.csv",
+    col_select = c("X", "Y", "Z"),
+    show_col_types = FALSE
+  ) |>
+    dist() |>
+    as.matrix() |>
+    corrr::as_cordf() |>
+    corrr::shave() |>
+    corrr::stretch(na.rm = TRUE) |>
+    dplyr::filter(dplyr::between(r, 30, 50)) |>
+    dplyr::select(-r) |>
+    dplyr::mutate(dplyr::across(tidyselect::everything(), as.integer))
+
+  d |>
+    dplyr::semi_join(power, by = dplyr::join_by(x, y)) |>
+    dplyr::left_join(gold, by = dplyr::join_by(sub, x, y, type, filtered)) |>
+    dplyr::mutate(dplyr::across(tidyselect::starts_with("r."), atanh)) |>
+    dplyr::summarise(
+      avg = mean(r.x - r.y),
+      mse = mean((r.x - r.y)^2),
+      mad = mad(r.x - r.y),
+      product_moment_cor = cor(r.x, r.y),
+      rank_cor = cor(r.x, r.y, method = "spear"),
+      v = var(r.x - r.y),
+      .by = c(sub, filtered, window_end, max_fd, iter, type)
+    )
 }
