@@ -262,3 +262,14 @@ by_run |>
   facet_wrap(~ dataset + ses) +
   scale_fill_viridis_d(option = "turbo") +
   ylab("Statistical Power")
+
+
+# UKB subset info:
+
+targets::tar_load(c(by_run, ukb_subs))
+
+by_run |>
+  filter(dataset == "ukb", !filtered) |>
+  mutate(sub = as.numeric(sub)) |>
+  filter(sub %in% ukb_subs, task == "rest", ses == "2") |>
+  summarise(avg = mean(loc), s = sd(loc))

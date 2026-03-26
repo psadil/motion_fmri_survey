@@ -368,31 +368,48 @@ get_ukb_subs <- function(
     purrr::pluck("sub")
 }
 
-get_qc_fd_ukb <- function(ukb, sub_id, n_iter = 250) {
-  fd <- ukb |>
+get_qc_fd_ukb_real <- function(
+  ukb,
+  sub_ids,
+  dvars_src = "data/dvars/ukb.parquet"
+) {
+  dvars <- duckplyr::read_parquet_duckdb(dvars_src, prudence = "lavish") |>
+    dplyr::filter(task == "rest", ses == 2, t > 0) |>
+    dplyr::filter(sub %in% c(sub_ids)) |>
+    dplyr::mutate(
+      filtered = dplyr::case_when(
+        stringr::str_detect(src, "clean") ~ "clean-DPD",
+        stringr::str_detect(src, "raw") ~ "raw-DPD",
+        .default = NA_character_
+      )
+    ) |>
+    dplyr::select(t, framewise_displacement = DPD, sub, filtered) |>
+    na.omit()
+
+  ukb |>
     dplyr::filter(ses == "2", task == "rest") |>
     dplyr::mutate(sub = as.numeric(sub)) |>
-    dplyr::filter(sub == sub_id) |>
+    dplyr::filter(sub %in% c(sub_ids)) |>
     dplyr::select(sub, t, tidyselect::starts_with("frame")) |>
     tidyr::pivot_longer(
       tidyselect::starts_with("frame"),
       names_to = "filtered",
       values_to = "framewise_displacement"
     ) |>
-    dplyr::mutate(filtered = stringr::str_detect(filtered, "filt"))
-
-  fd |>
-    tidyr::crossing(iter = seq_len(n_iter)) |>
-    dplyr::group_nest(sub, iter, filtered) |>
     dplyr::mutate(
-      data = purrr::map(
-        data,
-        ~ .x |>
-          dplyr::mutate(framewise_displacement = sample(framewise_displacement))
-      )
+      filtered = stringr::str_detect(filtered, "filt") |> as.character()
     ) |>
-    tidyr::unnest(data) |>
-    dplyr::bind_rows(dplyr::mutate(fd, iter = 0))
+    dplyr::bind_rows(dvars) |>
+    dplyr::mutate(iter = 0)
+}
+
+get_qc_fd_ukb <- function(qc_fd_ukb_real, new_iter) {
+  qc_fd_ukb_real |>
+    dplyr::mutate(iter = new_iter) |>
+    dplyr::mutate(
+      framewise_displacement = sample(framewise_displacement),
+      .by = c(sub, iter, filtered)
+    )
 }
 
 
@@ -615,4 +632,129 @@ get_cor_by_thresh_summary2 <- function(
       v = var(r.x - r.y),
       .by = c(sub, filtered, window_end, max_fd, iter, type)
     )
+}
+
+get_mac_prep <- function(d, timeseries_src, type_id) {
+  sub_id <- unique(d$sub)
+  checkmate::assert_numeric(sub_id, len = 1)
+
+  timeseries <- duckplyr::read_parquet_duckdb(timeseries_src) |>
+    dplyr::filter(sub == sub_id, type == type_id) |>
+    dplyr::select(-ses, -type) |>
+    na.omit()
+
+  d |>
+    dplyr::mutate(
+      framewise_displacement = rank(framewise_displacement),
+      .by = c(sub, filtered, iter)
+    ) |>
+    dplyr::mutate(
+      framewise_displacement = framewise_displacement /
+        max(framewise_displacement),
+      .by = c(sub, filtered, iter)
+    ) |>
+    dplyr::filter(framewise_displacement > threshold) |>
+    dplyr::select(-framewise_displacement) |>
+    dplyr::left_join(timeseries, by = dplyr::join_by(sub, t)) |>
+    dplyr::group_nest(sub, filtered, iter, threshold) |>
+    dplyr::mutate(
+      data = purrr::map(
+        data,
+        ~ .x |>
+          dplyr::select(-t) |>
+          corrr::correlate(quiet = TRUE) |>
+          corrr::shave() |>
+          corrr::stretch(na.rm = TRUE)
+      )
+    ) |>
+    tidyr::unnest(data) |>
+    dplyr::mutate(type = type_id)
+}
+
+
+get_mac <- function(mac_prep, real, timeseries_src) {
+  sub_id <- unique(mac_prep$sub)
+  type_id <- unique(mac_prep$type)
+  thresholds <- unique(mac_prep$threshold)
+
+  if (length(sub_id) == 0) {
+    return(tibble::tibble())
+  }
+
+  checkmate::assert_numeric(sub_id, len = 1)
+  checkmate::assert_character(type_id, len = 1)
+
+  full <- real |>
+    dplyr::select(-tar_group) |>
+    dplyr::filter(sub == sub_id) |>
+    tidyr::crossing(threshold = thresholds)
+
+  gold <- purrr::map(
+    unique(full$filtered),
+    ~ get_mac_prep(
+      d = dplyr::filter(full, filtered == .x),
+      timeseries_src = timeseries_src,
+      type_id = type_id
+    )
+  ) |>
+    dplyr::bind_rows() |>
+    dplyr::select(-iter) |>
+    dplyr::mutate(r = atanh(r))
+
+  mac_prep |>
+    dplyr::mutate(r = atanh(r)) |>
+    dplyr::summarise(
+      z_rand = mean(r),
+      .by = c(sub, threshold, x, y, type, filtered)
+    ) |>
+    dplyr::left_join(
+      gold,
+      by = dplyr::join_by(sub, x, y, type, filtered, threshold)
+    ) |>
+    dplyr::summarise(
+      mac = mean(abs(r - z_rand)),
+      .by = c(sub, threshold, type, filtered)
+    )
+}
+
+
+make_fig_mac <- function(mac) {
+  mac |>
+    dplyr::mutate(
+      type = dplyr::replace_values(
+        type,
+        "clean" ~ "fix+smooth",
+        "raw" ~ "24M+4S+BP+smooth",
+        "rawraw" ~ "BP+smooth"
+      ),
+      filtered = dplyr::replace_values(
+        filtered,
+        "TRUE" ~ "FD-filtered",
+        "FALSE" ~ "FD",
+        "clean-DPD" ~ "DPD-cleaned",
+        "raw-DPD" ~ "DPD",
+      )
+    ) |>
+    dplyr::filter(!filtered == "DPD-cleaned", !filtered == "FD-filtered") |>
+    dplyr::rename(
+      `Data Quality\nMeasure` = filtered,
+      `Preprocessing\nStrategy` = type
+    ) |>
+    ggplot2::ggplot(ggplot2::aes(
+      x = threshold,
+      y = mac,
+      linetype = `Data Quality\nMeasure`
+    )) +
+    ggplot2::geom_ribbon(
+      ggplot2::aes(
+        ymin = mac - 2 * sem,
+        ymax = mac + 2 * sem,
+        fill = `Preprocessing\nStrategy`
+      ),
+      alpha = 0.25
+    ) +
+    ggplot2::geom_line(ggplot2::aes(color = `Preprocessing\nStrategy`)) +
+    ggplot2::xlab("Proportion Frames Removed") +
+    ggplot2::ylab("Mean Absolute Change\n(Scrubbed-Random)") +
+    ggplot2::theme_gray(base_size = 10)
 }

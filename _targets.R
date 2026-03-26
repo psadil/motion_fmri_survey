@@ -465,25 +465,34 @@ list(
   tar_target(timeseries_src, "data/timeseries", format = "file"),
   tar_target(
     ukb_subs,
-    get_ukb_subs(by_run, timeseries_src, n = 10),
+    get_ukb_subs(by_run, timeseries_src, n = 500),
     format = "qs"
   ),
   tar_target(
-    qc_fd_ukb,
-    get_qc_fd_ukb(ukb, sub_id = ukb_subs, n_iter = 100),
-    pattern = map(ukb_subs)
+    qc_fd_ukb_real0,
+    get_qc_fd_ukb_real(ukb, ukb_subs),
+    deployment = "main"
   ),
-  tar_target(qc_fd_ukb_real, dplyr::filter(qc_fd_ukb, iter == 0)),
-  tarchetypes::tar_group_by(qc_fd_ukb2, qc_fd_ukb, sub, iter),
-  tar_target(type_id, c("clean", "raw"), format = "qs"), # for ukb timeseries
+  tarchetypes::tar_group_by(
+    qc_fd_ukb_real,
+    qc_fd_ukb_real0,
+    sub
+  ),
+  tar_target(iter, seq_len(10), format = "qs"),
+  tar_target(
+    qc_fd_ukb0,
+    get_qc_fd_ukb(dplyr::select(qc_fd_ukb_real, -tar_group), new_iter = iter),
+    pattern = cross(qc_fd_ukb_real, iter)
+  ),
+  tar_target(type_id, c("clean", "raw", "rawraw"), format = "qs"), # for ukb timeseries
   tar_target(
     qc_ukb,
     get_cor_by_thresh(
-      d = dplyr::select(qc_fd_ukb2, -tar_group),
+      d = qc_fd_ukb,
       timeseries_src = timeseries_src,
       type_id = type_id
     ),
-    pattern = cross(map(qc_fd_ukb2), type_id)
+    pattern = cross(qc_fd_ukb, type_id)
   ),
   tar_target(
     qc_ukb_summary,
@@ -494,22 +503,66 @@ list(
     ),
     pattern = map(qc_ukb)
   ),
+  tarchetypes::tar_group_by(
+    qc_fd_ukb,
+    tidyr::crossing(qc_fd_ukb0, threshold = seq(0.01, .2, by = 0.02)),
+    threshold,
+    sub
+  ),
   tar_target(
-    qc_ukb2,
-    get_cor_by_thresh2(
-      d = dplyr::select(qc_fd_ukb2, -tar_group),
+    mac_prep,
+    get_mac_prep(
+      d = dplyr::select(qc_fd_ukb, -tar_group),
       timeseries_src = timeseries_src,
       type_id = type_id
     ),
-    pattern = cross(map(qc_fd_ukb2), type_id)
+    pattern = cross(qc_fd_ukb, type_id)
   ),
   tar_target(
-    qc_ukb_summary2,
-    get_cor_by_thresh_summary2(
-      qc_ukb2,
+    mac0,
+    get_mac(
+      mac_prep,
       real = qc_fd_ukb_real,
       timeseries_src = timeseries_src
     ),
-    pattern = map(qc_ukb2)
+    pattern = map(mac_prep)
+  ),
+  tar_target(
+    mac,
+    mac0 |>
+      dplyr::summarise(
+        v = var(mac),
+        sem = sd(mac) / sqrt(dplyr::n()),
+        mac = mean(mac),
+        .by = c(threshold, type, filtered)
+      ),
+  ),
+  tar_target(
+    fig_mac,
+    write_png(
+      make_fig_mac(mac),
+      "figures/mac.png",
+      width = 6,
+      height = 3
+    ),
+    format = "file"
   )
+  # tar_target(
+  #   qc_ukb2,
+  #   get_cor_by_thresh2(
+  #     d = dplyr::select(qc_fd_ukb2, -tar_group),
+  #     timeseries_src = timeseries_src,
+  #     type_id = type_id
+  #   ),
+  #   pattern = cross(map(qc_fd_ukb2), type_id)
+  # ),
+  # tar_target(
+  #   qc_ukb_summary2,
+  #   get_cor_by_thresh_summary2(
+  #     qc_ukb2,
+  #     real = qc_fd_ukb_real,
+  #     timeseries_src = timeseries_src
+  #   ),
+  #   pattern = map(qc_ukb2)
+  # )
 )
