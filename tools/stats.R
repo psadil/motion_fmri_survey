@@ -273,3 +273,200 @@ by_run |>
   mutate(sub = as.numeric(sub)) |>
   filter(sub %in% ukb_subs, task == "rest", ses == "2") |>
   summarise(avg = mean(loc), s = sd(loc))
+
+
+# demographic table of high vs. low movers
+library(dplyr)
+library(tidyr)
+library(table1)
+library(ggplot2)
+
+targets::tar_load(c(by_run, demographics, lost_strict2))
+
+splits <- by_run |>
+  filter(
+    task == "rest",
+    !filtered,
+    scan == 1,
+    dataset %in% c("abcd", "hcpya"),
+    ses %in% c("baseline", 1)
+  ) |>
+  mutate(
+    group = if_else(loc > median(loc), "high", "low"),
+    .by = c(dataset)
+  ) |>
+  select(dataset, sub, group, loc)
+
+toshow <- demographics |>
+  inner_join(splits) |>
+  filter(ses %in% c(1, "baseline")) |>
+  rename(sex = sex_gender) |>
+  mutate(sex = forcats::fct_drop(sex))
+
+table1(~ age + bmi + sex | dataset + group, toshow)
+
+library(gtsummary)
+
+toshow |>
+  select(dataset, Age = age, BMI = bmi, Sex = sex, Group = group) |>
+  na.omit() |>
+  gtsummary::tbl_strata(
+    strata = dataset,
+    ~ .x |>
+      tbl_summary(by = Group) |>
+      modify_header(all_stat_cols() ~ "**{level}**")
+  ) |>
+  as_gt() |>
+  gt::gtsave("figures/highlowdemo.tex")
+
+
+toshow2 <- readr::read_csv(
+  "data/human-connectome-project-restricted/RESTRICTED_martin_2_5_2024_10_18_28.csv"
+) |>
+  select(sub = Subject, starts_with("ASR_"), starts_with("DSM_")) |>
+  select(!ends_with("Pct") & !ends_with("Sum")) |>
+  mutate(sub = as.character(sub)) |>
+  rename_with(
+    ~ .x |>
+      stringr::str_remove("ASR_") |>
+      stringr::str_remove("DSM_") |>
+      stringr::str_remove("_T")
+  ) |>
+  inner_join(splits) |>
+  select(-dataset)
+
+table1(
+  ~ Witd +
+    Soma +
+    Thot +
+    Attn +
+    Aggr +
+    Rule +
+    Intr +
+    Intn +
+    Extn +
+    Totp +
+    Depr +
+    Anxi +
+    Somp +
+    Avoid +
+    Adh +
+    Antis |
+    group,
+  toshow2
+)
+
+
+toshow2 |>
+  select(-ends_with("Raw")) |>
+  pivot_longer(c(-sub, -group, -loc)) |>
+  group_nest(name) |>
+  mutate(
+    data = purrr::map(
+      data,
+      ~ lm(value ~ loc, .x) |> broom::tidy(conf.int = TRUE)
+    )
+  ) |>
+  unnest(data) |>
+  filter(stringr::str_detect(term, "Inter", TRUE)) |>
+  arrange(estimate) |>
+  mutate(name = factor(name, levels = .data$name)) |>
+  ggplot(aes(y = name)) +
+  geom_point(aes(x = estimate)) +
+  geom_segment(aes(x = conf.low, xend = conf.high)) +
+  ylab("Psychiatric and Life Function Variable") +
+  xlab("Estimate")
+
+ggsave("figures/hcp-psych.png", width = 4, height = 4, device = ragg::agg_png)
+
+nih <- readr::read_csv("data/tabular/core/neurocognition/nc_y_nihtb.csv") |>
+  select(sub = src_subject_id, ses = eventname, ends_with("agecorrected")) |>
+  rename_with(
+    ~ stringr::str_remove(.x, "nihtbx_") |> stringr::str_remove("_agecorrected")
+  ) |>
+  mutate(
+    ses = replace_values(
+      ses,
+      "baseline_year_1_arm_1" ~ "baseline",
+      "2_year_follow_up_y_arm_1" ~ "Year2",
+      "4_year_follow_up_y_arm_1" ~ "Year4"
+    ),
+    sub = stringr::str_remove(sub, "_")
+  )
+
+xsx <- readr::read_csv("data/tabular/core/imaging/mri_y_rsfmr_cor_gp_gp.csv") |>
+  rename(sub = src_subject_id, ses = eventname) |>
+  mutate(
+    ses = replace_values(
+      ses,
+      "baseline_year_1_arm_1" ~ "baseline",
+      "2_year_follow_up_y_arm_1" ~ "Year2",
+      "4_year_follow_up_y_arm_1" ~ "Year4"
+    ),
+    sub = stringr::str_remove(sub, "_")
+  )
+
+d_s <- left_join(nih, xsx) |>
+  inner_join(
+    filter(
+      lost_strict2,
+      dataset == "abcd",
+      task == "rest",
+      scan == "1",
+      !filtered
+    ) |>
+      distinct()
+  )
+
+predictor_vars <- nih |> select(-sub, -ses) |> names()
+outcome_vars <- xsx |> select(-sub, -ses) |> names()
+
+get_cors <- function(d, predictor_vars, outcome_vars) {
+  cors <- expand_grid(
+    predictor = predictor_vars,
+    outcome = outcome_vars
+  ) |>
+    mutate(
+      # Use map2_dbl to iterate over the two columns simultaneously
+      correlation = purrr::map2(
+        .x = predictor,
+        .y = outcome,
+        ~ cor.test(d[[.x]], d[[.y]], method = "spear") |>
+          broom::tidy() |>
+          select(-method, -alternative),
+        .progress = TRUE
+      )
+    ) |>
+    unnest(correlation)
+}
+
+nolost <- get_cors(d_s, predictor_vars, outcome_vars)
+strict <- get_cors(filter(d_s, exclude), predictor_vars, outcome_vars)
+
+bind_rows(list("none" = nolost, "strict" = strict), .id = "group") |>
+  select(-statistic, -p.value) |>
+  pivot_wider(names_from = group, values_from = estimate) |>
+  ggplot(aes(x = none, y = strict)) +
+  geom_point() +
+  geom_abline() +
+  geom_smooth(method = "lm")
+
+ggsave("figures/strict-vs-none-bwas.png", device = ragg::agg_png)
+
+
+library(gtsummary)
+targets::tar_load(c(demographics))
+
+plot_demo_tbl <- function(by_run, demographics, ds) {
+  by_run |>
+    filter(dataset == ds) |>
+    distinct(sub, ses, dataset) |>
+    left_join(demographics) |>
+    select(sub, ses, Age = age, BMI = bmi, Sex = sex_gender) |>
+    mutate(ses = forcats::fct_drop(ses), Sex = forcats::fct_drop(Sex)) |>
+    tbl_summary(by = ses, include = c(-sub)) |>
+    as_gt() |>
+    gt::gtsave(glue::glue("figures/demographics-{ds}.tex"))
+}
+
+purrr::walk(unique(by_run$dataset), ~ plot_demo_tbl(by_run, demographics, .x))

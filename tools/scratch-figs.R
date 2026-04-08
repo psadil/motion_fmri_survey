@@ -10,7 +10,8 @@ GeomSplitViolin <- ggproto(
   "GeomSplitViolin",
   GeomViolin,
   draw_group = function(self, data, ..., draw_quantiles = NULL) {
-    data <- transform(data,
+    data <- transform(
+      data,
       xminv = x - violinwidth * (x - xmin),
       xmaxv = x + violinwidth * (xmax - x)
     )
@@ -19,12 +20,24 @@ GeomSplitViolin <- ggproto(
       transform(data, x = if (grp %% 2 == 1) xminv else xmaxv),
       if (grp %% 2 == 1) y else -y
     )
-    newdata <- rbind(newdata[1, ], newdata, newdata[nrow(newdata), ], newdata[1, ])
-    newdata[c(1, nrow(newdata) - 1, nrow(newdata)), "x"] <- round(newdata[1, "x"])
+    newdata <- rbind(
+      newdata[1, ],
+      newdata,
+      newdata[nrow(newdata), ],
+      newdata[1, ]
+    )
+    newdata[c(1, nrow(newdata) - 1, nrow(newdata)), "x"] <- round(newdata[
+      1,
+      "x"
+    ])
     if (length(draw_quantiles) > 0 & !scales::zero_range(range(data$y))) {
       stopifnot(all(draw_quantiles >= 0), all(draw_quantiles <= 1))
       quantiles <- ggplot2:::create_quantile_segment_frame(data, draw_quantiles)
-      aesthetics <- data[rep(1, nrow(quantiles)), setdiff(names(data), c("x", "y")), drop = FALSE]
+      aesthetics <- data[
+        rep(1, nrow(quantiles)),
+        setdiff(names(data), c("x", "y")),
+        drop = FALSE
+      ]
       aesthetics$alpha <- rep(1, nrow(quantiles))
       both <- cbind(quantiles, aesthetics)
       quantile_grob <- GeomPath$draw_panel(both, ...)
@@ -33,21 +46,27 @@ GeomSplitViolin <- ggproto(
         grid::grobTree(GeomPolygon$draw_panel(newdata, ...), quantile_grob)
       )
     } else {
-      ggplot2:::ggname("geom_split_violin", GeomPolygon$draw_panel(newdata, ...))
+      ggplot2:::ggname(
+        "geom_split_violin",
+        GeomPolygon$draw_panel(newdata, ...)
+      )
     }
   }
 )
 
-geom_split_violin <- function(mapping = NULL,
-                              data = NULL,
-                              stat = "ydensity",
-                              position = "identity", ...,
-                              draw_quantiles = NULL,
-                              trim = TRUE,
-                              scale = "area",
-                              na.rm = FALSE,
-                              show.legend = NA,
-                              inherit.aes = TRUE) {
+geom_split_violin <- function(
+  mapping = NULL,
+  data = NULL,
+  stat = "ydensity",
+  position = "identity",
+  ...,
+  draw_quantiles = NULL,
+  trim = TRUE,
+  scale = "area",
+  na.rm = FALSE,
+  show.legend = NA,
+  inherit.aes = TRUE
+) {
   layer(
     data = data,
     mapping = mapping,
@@ -60,7 +79,8 @@ geom_split_violin <- function(mapping = NULL,
       trim = trim,
       scale = scale,
       draw_quantiles = draw_quantiles,
-      na.rm = na.rm, ...
+      na.rm = na.rm,
+      ...
     )
   )
 }
@@ -76,7 +96,7 @@ all_by_run <- by_run |>
   filter(filtered) |>
   left_join(distinct(demographics, dataset, sub, ses, age, sex_gender, bmi)) |>
   mutate(
-    dataset = case_match(
+    dataset = recode_values(
       dataset,
       "abcd" ~ "ABCD",
       "hcpa" ~ "HCPA",
@@ -123,7 +143,10 @@ b1 <- all_by_run |>
   filter(stringr::str_detect(dataset, "ABCD", TRUE)) |>
   ggplot(aes(x = bmi, color = dataset)) +
   scattermore::geom_scattermore(aes(y = loc), alpha = 0.5, pointsize = 1) +
-  geom_segment(aes(x = xmin, xend = xmax, y = y), data = filter(ranges_bmi, !dataset == "ABCD")) +
+  geom_segment(
+    aes(x = xmin, xend = xmax, y = y),
+    data = filter(ranges_bmi, !dataset == "ABCD")
+  ) +
   geom_smooth(aes(y = loc, group = dataset), method = "lm") +
   coord_cartesian(ylim = c(-0.1, 1)) +
   scale_color_viridis_d(option = "turbo", guide = "none", drop = FALSE) +
@@ -137,7 +160,10 @@ b2 <- all_by_run |>
   ggplot(aes(x = bmi, color = dataset)) +
   scattermore::geom_scattermore(aes(y = loc), alpha = 0.5, pointsize = 1) +
   geom_smooth(aes(y = loc, group = dataset), method = "lm") +
-  geom_segment(aes(x = xmin, xend = xmax, y = y), data = filter(ranges_bmi, dataset == "ABCD")) +
+  geom_segment(
+    aes(x = xmin, xend = xmax, y = y),
+    data = filter(ranges_bmi, dataset == "ABCD")
+  ) +
   coord_cartesian(ylim = c(-0.1, 1)) +
   scale_color_viridis_d(option = "turbo", guide = "none", drop = FALSE) +
   ylab("Average Framewise\nDisplacement (mm)") +
@@ -172,7 +198,11 @@ c <- all_by_run |>
 d <- mriqc |>
   filter(fd_mean < quantile(fd_mean, 0.99)) |>
   ggplot(aes(x = dataset, y = fd_mean)) +
-  stat_slab(aes(thickness = after_stat(pdf * n)), scale = 0.7, orientation = "vertical") +
+  stat_slab(
+    aes(thickness = after_stat(pdf * n)),
+    scale = 0.7,
+    orientation = "vertical"
+  ) +
   stat_dotsinterval(
     side = "bottom",
     scale = 0.7,
@@ -185,7 +215,10 @@ d <- mriqc |>
   xlab(NULL) +
   theme_gray(base_size = 11)
 
-p <- a + b + c + d +
+p <- a +
+  b +
+  c +
+  d +
   plot_annotation(tag_levels = "a") +
   plot_layout(nrow = 2, guides = "collect") &
   theme(legend.position = "bottom")
@@ -199,7 +232,11 @@ ggsave(
 )
 
 
-p <- a + b2 + b1 + c + d +
+p <- a +
+  b2 +
+  b1 +
+  c +
+  d +
   plot_layout(nrow = 1, guides = "collect", widths = c(3, 1, 3, 3, 1)) &
   theme(legend.position = "bottom")
 ggsave(
@@ -211,72 +248,14 @@ ggsave(
 )
 
 
-demo_tbl <- all_by_run |>
-  mutate(
-    dataset = interaction(dataset, ses, lex.order = TRUE, drop = TRUE)
-  ) |>
-  distinct(dataset, age, sex_gender, bmi, ses, sub)
-
-demo_tbl |>
-  na.omit() |>
-  filter(stringr::str_detect(dataset, "ABCD")) |>
-  mutate(ses = forcats::fct_drop(ses)) |>
-  select(age, sex_gender, bmi, ses) |>
-  tbl_summary(by = ses, missing = "no") |>
-  as_gt() |>
-  gt::gtsave("figures/demographics-abcd.tex")
-
-demo_tbl |>
-  na.omit() |>
-  filter(stringr::str_detect(dataset, "HCPD")) |>
-  select(age, sex_gender, bmi, ses) |>
-  mutate(ses = forcats::fct_drop(ses)) |>
-  tbl_summary(by = ses, missing = "no") |>
-  as_gt() |>
-  gt::gtsave("figures/demographics-hcpd.tex")
-
-demo_tbl |>
-  na.omit() |>
-  filter(stringr::str_detect(dataset, "HCPA")) |>
-  select(age, sex_gender, bmi, ses) |>
-  mutate(ses = forcats::fct_drop(ses)) |>
-  tbl_summary(by = ses, missing = "no") |>
-  as_gt() |>
-  gt::gtsave("figures/demographics-hcpa.tex")
-
-demo_tbl |>
-  na.omit() |>
-  filter(stringr::str_detect(dataset, "HCPYA")) |>
-  select(age, sex_gender, bmi, ses) |>
-  mutate(ses = forcats::fct_drop(ses)) |>
-  tbl_summary(by = ses, missing = "no") |>
-  as_gt() |>
-  gt::gtsave("figures/demographics-hcpya.tex")
-
-demo_tbl |>
-  na.omit() |>
-  filter(stringr::str_detect(dataset, "UKB")) |>
-  select(age, sex_gender, bmi, ses) |>
-  mutate(ses = forcats::fct_drop(ses)) |>
-  tbl_summary(by = ses, missing = "no") |>
-  as_gt() |>
-  gt::gtsave("figures/demographics-ukb.tex")
-
-
-demo_tbl |>
-  filter(stringr::str_detect(dataset, "SpaceTop")) |>
-  select(age, sex_gender, ses) |>
-  na.omit() |>
-  mutate(ses = forcats::fct_drop(ses)) |>
-  tbl_summary(by = ses, missing = "no") |>
-  as_gt() |>
-  gt::gtsave("figures/demographics-spacetop.tex")
-
 
 a <- by_run |>
   filter(dataset == "hcpya", !filtered) |>
   ggplot(aes(y = task, color = scan, x = loc)) +
-  geom_boxplot(outliers = FALSE, position = position_dodge(preserve = "single")) +
+  geom_boxplot(
+    outliers = FALSE,
+    position = position_dodge(preserve = "single")
+  ) +
   xlab("Framewise Displacement (mm)") +
   ylab(NULL) +
   coord_cartesian(xlim = c(0, 1)) +
@@ -287,7 +266,10 @@ b <- by_run |>
   filter(!is.na(scan), !filtered) |>
   filter(dataset == "hcpd") |>
   ggplot(aes(y = task, color = scan, x = loc)) +
-  geom_boxplot(outliers = FALSE, position = position_dodge(preserve = "single")) +
+  geom_boxplot(
+    outliers = FALSE,
+    position = position_dodge(preserve = "single")
+  ) +
   xlab("Framewise Displacement (mm)") +
   ylab(NULL) +
   coord_cartesian(xlim = c(0, 1)) +
@@ -297,7 +279,10 @@ b <- by_run |>
 c <- by_run |>
   filter(dataset == "hcpa", !filtered) |>
   ggplot(aes(y = task, color = scan, x = loc)) +
-  geom_boxplot(outliers = FALSE, position = position_dodge(preserve = "single")) +
+  geom_boxplot(
+    outliers = FALSE,
+    position = position_dodge(preserve = "single")
+  ) +
   xlab("Framewise Displacement (mm)") +
   ylab(NULL) +
   coord_cartesian(xlim = c(0, 1)) +
@@ -308,7 +293,10 @@ d <- by_run |>
   filter(dataset == "ukb", !filtered) |>
   ggplot(aes(y = task, color = scan, x = loc)) +
   facet_wrap(~ses, nrow = 2, labeller = "label_both") +
-  geom_boxplot(outliers = FALSE, position = position_dodge(preserve = "single")) +
+  geom_boxplot(
+    outliers = FALSE,
+    position = position_dodge(preserve = "single")
+  ) +
   xlab("Framewise Displacement (mm)") +
   ylab(NULL) +
   coord_cartesian(xlim = c(0, 1)) +
@@ -320,7 +308,10 @@ e <- by_run |>
   filter(dataset == "abcd") |>
   ggplot(aes(y = task, color = scan, x = loc)) +
   facet_wrap(~ses, nrow = 3, labeller = "label_both") +
-  geom_boxplot(outliers = FALSE, position = position_dodge(preserve = "single")) +
+  geom_boxplot(
+    outliers = FALSE,
+    position = position_dodge(preserve = "single")
+  ) +
   xlab("Framewise Displacement (mm)") +
   ylab(NULL) +
   coord_cartesian(xlim = c(0, 1)) +
@@ -332,7 +323,10 @@ f <- by_run |>
   filter(dataset == "spacetop") |>
   ggplot(aes(y = task, color = scan, x = loc)) +
   facet_wrap(~ses, scales = "free_y", labeller = "label_both") +
-  geom_boxplot(outliers = FALSE, position = position_dodge(preserve = "single")) +
+  geom_boxplot(
+    outliers = FALSE,
+    position = position_dodge(preserve = "single")
+  ) +
   xlab("Framewise Displacement (mm)") +
   ylab(NULL) +
   coord_cartesian(xlim = c(0, 1)) +
@@ -340,7 +334,12 @@ f <- by_run |>
   ggtitle("SpaceTop") +
   guides(color = guide_legend(nrow = 1))
 
-p <- a + b + c + d + e + f +
+p <- a +
+  b +
+  c +
+  d +
+  e +
+  f +
   plot_layout(
     guides = "collect",
     design = "
@@ -370,8 +369,15 @@ ggsave(
 p <- by_run |>
   filter(!is.na(scan)) |>
   ggplot(aes(y = task, color = scan, x = loc)) +
-  ggh4x::facet_nested(dataset + ses ~ filtered, scales = "free_y", labeller = "label_both") +
-  geom_boxplot(outliers = FALSE, position = position_dodge(preserve = "single")) +
+  ggh4x::facet_nested(
+    dataset + ses ~ filtered,
+    scales = "free_y",
+    labeller = "label_both"
+  ) +
+  geom_boxplot(
+    outliers = FALSE,
+    position = position_dodge(preserve = "single")
+  ) +
   xlab("Framewise Displacement (mm)") +
   ylab(NULL) +
   coord_cartesian(xlim = c(0, 1)) +
@@ -493,7 +499,12 @@ f <- by_time |>
   ggtitle("SpaceTop") +
   guides(color = guide_legend(nrow = 1))
 
-p <- a + b + c + d + e + f +
+p <- a +
+  b +
+  c +
+  d +
+  e +
+  f +
   plot_layout(
     guides = "collect",
     design = "
@@ -603,7 +614,11 @@ targets::tar_load(lost)
 
 p <- lost |>
   ggplot(aes(y = task, fill = scan, x = lost)) +
-  ggh4x::facet_nested(dataset + ses ~ filtered + type, scales = "free_y", labeller = "label_both") +
+  ggh4x::facet_nested(
+    dataset + ses ~ filtered + type,
+    scales = "free_y",
+    labeller = "label_both"
+  ) +
   geom_col(aes(fill = scan), position = position_dodge(preserve = "single")) +
   geom_errorbarh(
     aes(xmin = lower, xmax = upper),
@@ -725,7 +740,12 @@ f <- lost |>
   guides(fill = guide_legend(nrow = 1))
 
 
-p <- a + b + c + d + e + f +
+p <- a +
+  b +
+  c +
+  d +
+  e +
+  f +
   plot_layout(
     guides = "collect",
     design = "
@@ -765,7 +785,11 @@ lost2 <- targets::tar_read(lost_strict) |>
 
 p <- lost2 |>
   ggplot(aes(y = task, fill = scan, x = lost)) +
-  ggh4x::facet_nested(dataset + ses ~ type, scales = "free_y", labeller = "label_both") +
+  ggh4x::facet_nested(
+    dataset + ses ~ type,
+    scales = "free_y",
+    labeller = "label_both"
+  ) +
   geom_col(aes(fill = scan), position = position_dodge(preserve = "single")) +
   scale_fill_viridis_d(option = "turbo") +
   ylab(NULL) +
@@ -859,7 +883,12 @@ f <- lost2 |>
   guides(fill = guide_legend(nrow = 1))
 
 
-p <- a + b + c + d + e + f +
+p <- a +
+  b +
+  c +
+  d +
+  e +
+  f +
   plot_layout(
     guides = "collect",
     design = "
@@ -1055,7 +1084,10 @@ p <- all_by_run |>
         mutate(
           age = cut(
             age,
-            breaks = c(-Inf, quantile(age, probs = c(0.25, 0.5, 0.75, 1), na.rm = TRUE)),
+            breaks = c(
+              -Inf,
+              quantile(age, probs = c(0.25, 0.5, 0.75, 1), na.rm = TRUE)
+            ),
             labels = c("[0, 25)", "[25, 50)", "[50, 75)", "[75, 100]"),
             ordered_result = TRUE
           )
@@ -1139,7 +1171,9 @@ ggsave(
 
 # notch params
 
-hcpa <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/hcpa_spectrum.parquet") |>
+hcpa <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/hcpa_spectrum.parquet"
+) |>
   filter(between(freq, 0.1, 0.6), param == "trans_y") |>
   collect() |>
   slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, ped)) |>
@@ -1152,7 +1186,9 @@ hcpa <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/hcpa_spectrum
     upper = quantile(freq, 0.75),
     .by = c(task)
   )
-hcpd <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/hcpd_spectrum.parquet") |>
+hcpd <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/hcpd_spectrum.parquet"
+) |>
   filter(between(freq, 0.1, 0.6), param == "trans_y") |>
   collect() |>
   slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, ped)) |>
@@ -1165,7 +1201,9 @@ hcpd <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/hcpd_spectrum
     upper = quantile(freq, 0.75),
     .by = c(task)
   )
-hcpya <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/hcpya_spectrum.parquet") |>
+hcpya <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/hcpya_spectrum.parquet"
+) |>
   filter(between(freq, 0.1, 0.6), param == "trans_x") |>
   collect() |>
   slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, ped)) |>
@@ -1179,7 +1217,9 @@ hcpya <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/hcpya_spectr
     .by = c(task)
   )
 
-abcd <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/abcd_spectrum.parquet") |>
+abcd <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/abcd_spectrum.parquet"
+) |>
   filter(between(freq, 0.1, 0.6), param == "trans_y") |>
   collect() |>
   slice_max(order_by = pxx, n = 1, by = c(sub, ses, task)) |>
@@ -1189,7 +1229,9 @@ abcd <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/abcd_spectrum
     .by = c(task, ses)
   )
 
-ukb <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/ukb_spectrum.parquet") |>
+ukb <- arrow::open_dataset(
+  "/Users/psadil/data/motion/derivatives/ukb_spectrum.parquet"
+) |>
   filter(between(freq, 0.1, 0.6), param == "trans_y") |>
   collect() |>
   slice_max(order_by = pxx, n = 1, by = c(sub, ses, task)) |>
@@ -1203,7 +1245,9 @@ ukb <- arrow::open_dataset("/Users/psadil/data/motion/derivatives/ukb_spectrum.p
     .by = c(task)
   )
 
-spacetop <- arrow::read_parquet("/Users/psadil/data/motion/derivatives/spacetop_spectrum.parquet") |>
+spacetop <- arrow::read_parquet(
+  "/Users/psadil/data/motion/derivatives/spacetop_spectrum.parquet"
+) |>
   filter(between(freq, 0.1, 0.6), param == "trans_y") |>
   slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, run)) |>
   summarise(
