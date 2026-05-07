@@ -43,75 +43,114 @@ rescale <- function(.data, ...) {
 }
 
 
-get_hcpa_spectrum <- function(src, by_run) {
+get_hcpa_spectrum <- function(src, hcpa) {
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
-    do_casting() |>
-    dplyr::left_join(
-      .avg_by_run(dplyr::filter(by_run, dataset == "hcpa")),
-      by = dplyr::join_by(sub)
-    ) |>
-    dplyr::filter(!(task == "REST1" & ped == "PA")) |>
-    rescale(task, ped, sub, param)
-}
-
-get_hcpd_spectrum <- function(src, by_run, excluded) {
-  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
-    do_casting() |>
-    dplyr::left_join(
-      .avg_by_run(dplyr::filter(by_run, dataset == "hcpd")),
-      by = dplyr::join_by(sub)
-    ) |>
-    dplyr::filter(!(task %in% c("REST1a", "REST1b", "REST2a", "REST2b"))) |>
+    add_run() |>
     dplyr::mutate(
-      task = stringr::str_to_lower(task)
+      task = stringr::str_to_lower(task),
+      run = dplyr::recode_values(
+        task,
+        "rest1" ~ 1L,
+        "rest2" ~ 2L,
+        default = run
+      )
     ) |>
-    dplyr::filter(!is.na(avg)) |>
-    dplyr::anti_join(excluded) |>
-    rescale(task, ped, sub, param)
-}
-
-get_hcpya_spectrum <- function(src, by_run, excluded) {
-  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
     do_casting() |>
-    dplyr::left_join(
-      .avg_by_run(dplyr::filter(by_run, dataset == "hcpya")),
-      by = dplyr::join_by(sub)
-    ) |>
-    dplyr::filter(!is.na(avg)) |>
-    dplyr::anti_join(excluded, by = dplyr::join_by(sub, task, ped)) |>
-    rescale(task, ped, sub, param)
+    dplyr::inner_join(
+      dplyr::distinct(hcpa, sub, task, run, ped, ses, scan),
+      by = dplyr::join_by(sub, ses, task, ped, run)
+    )
 }
 
-get_abcd_spectrum <- function(src, by_run, excluded) {
-  by_run_abcd <- by_run |>
-    dplyr::filter(dataset == "abcd", task == "rest", !filtered) |>
-    dplyr::summarise(avg = median(loc), .by = c(sub, ses))
+get_hcpd_spectrum <- function(src, hcpd) {
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    add_run() |>
+    dplyr::mutate(
+      task = stringr::str_to_lower(task),
+      run = dplyr::recode_values(
+        task,
+        "rest1" ~ 1L,
+        "rest2" ~ 2L,
+        default = run
+      ),
+      task = dplyr::case_when(
+        task == "rest1a" ~ "resta",
+        task == "rest1b" ~ "restb",
+        task == "rest2a" ~ "resta",
+        task == "rest2b" ~ "restb",
+        stringr::str_detect(task, "rest") ~ "rest",
+        .default = task
+      )
+    ) |>
+    do_casting() |>
+    dplyr::inner_join(
+      dplyr::distinct(hcpd, sub, task, run, ped, ses, scan),
+      by = dplyr::join_by(sub, ses, task, ped, run)
+    )
+}
+
+get_hcpya_spectrum <- function(src, hcpya) {
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    add_run() |>
+    dplyr::mutate(
+      task = stringr::str_to_lower(task),
+      run = dplyr::recode_values(
+        task,
+        "rest1" ~ 1L,
+        "rest2" ~ 2L,
+        default = run
+      ),
+      task = dplyr::case_when(
+        task == "rest1a" ~ "resta",
+        task == "rest1b" ~ "restb",
+        task == "rest2a" ~ "resta",
+        task == "rest2b" ~ "restb",
+        stringr::str_detect(task, "rest") ~ "rest",
+        .default = task
+      )
+    ) |>
+    do_casting() |>
+    dplyr::inner_join(
+      dplyr::distinct(hcpya, sub, task, run, ped, ses, scan),
+      by = dplyr::join_by(sub, ses, task, ped, run)
+    )
+}
+
+get_abcd_spectrum <- function(src, abcd) {
+  to_keep <- dplyr::distinct(abcd, sub, task, run, ped, ses, scan)
 
   unique_ses_src <- duckplyr::read_parquet_duckdb(src) |>
-    dplyr::distinct(ses) |>
-    purrr::pluck("ses")
-  out <- vector("list", length(unique_ses_src))
-  for (i in seq_along(unique_ses_src)) {
+    dplyr::distinct(ses, run) |>
+    dplyr::collect()
+  out <- vector("list", nrow(unique_ses_src))
+  for (i in seq_len(nrow(unique_ses_src))) {
     out[[i]] <- duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
-      dplyr::filter(ses == unique_ses_src[i]) |>
+      dplyr::filter(
+        ses == unique_ses_src$ses[[i]],
+        run == unique_ses_src$run[[i]]
+      ) |>
       convert_abcd_ses() |>
       do_casting() |>
-      dplyr::anti_join(excluded, by = dplyr::join_by(sub, ses, task, run)) |>
-      dplyr::left_join(by_run_abcd, by = dplyr::join_by(sub, ses)) |>
-      dplyr::filter(!is.na(avg)) |>
-      rescale(task, sub, ses, run, param)
+      dplyr::inner_join(to_keep, by = dplyr::join_by(sub, ses, task, run))
   }
   dplyr::bind_rows(out)
 }
 
-get_spacetop_spectrum <- function(src, by_run, excluded) {
+get_spacetop_spectrum <- function(src, spacetop) {
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::mutate(ses = as.integer(ses), ped = "AP", scan = run) |> # need to strip leading 0 before do_casting
     do_casting() |>
-    dplyr::left_join(
-      .avg_by_run(dplyr::filter(by_run, dataset == "spacetop")),
-      by = dplyr::join_by(sub)
+    dplyr::inner_join(
+      dplyr::distinct(spacetop, sub, task, run, ped, ses, scan),
+      by = dplyr::join_by(sub, ses, task, ped, run, scan)
+    )
+}
+
+bind_spectrum <- function(datasets, by_run) {
+  dplyr::bind_rows(datasets, .id = "dataset") |>
+    dplyr::inner_join(
+      .avg_by_run(by_run),
+      by = dplyr::join_by(sub, dataset)
     ) |>
-    dplyr::filter(!is.na(avg)) |>
-    dplyr::anti_join(excluded, by = dplyr::join_by(sub, ses, task, run)) |>
-    rescale(task, ses, run, sub, param)
+    rescale(task, ses, run, sub, param, scan, dataset)
 }

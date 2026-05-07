@@ -2,6 +2,8 @@ library(targets)
 library(tarchetypes)
 library(crew)
 
+# TODO: add UKB Spectrum
+
 source("R/hcp.R")
 source("R/ukb.R")
 source("R/abcd.R")
@@ -15,8 +17,8 @@ source("R/cost.R")
 
 targets::tar_option_set(
   trust_timestamps = TRUE,
-  format = "parquet",
-  controller = crew::crew_controller_local(workers = 6)
+  format = "parquet"
+  # controller = crew::crew_controller_local(workers = 6)
 )
 
 
@@ -67,7 +69,16 @@ list(
     "data/motion/derivatives/hcpya.parquet",
     format = "file"
   ),
-  tar_target(hcpya_exclusion, get_hcpya_exclusion(hcpya_source)),
+  tar_target(
+    hcpya_exclusion_src,
+    "data/exclusion/hcp_ya_qc_issue_exclusion.tsv",
+    format = "file"
+  ),
+  tar_target(
+    hcpya_exclusion,
+    get_hcpya_exclusion_by_other(hcpya_exclusion_src),
+    deployment = "main"
+  ),
   tar_target(
     hcpya,
     get_hcp(hcpya_source, hcpya_exclusion),
@@ -78,7 +89,7 @@ list(
     "data/motion/derivatives/hcpa.parquet",
     format = "file"
   ),
-  tar_target(hcpa, get_hcp(hcpa_source), deployment = "main"),
+  tar_target(hcpa, get_hcp(hcpa_source, hcpa_exclusion), deployment = "main"),
   tar_target(
     hcpd_source,
     "data/motion/derivatives/hcpd.parquet",
@@ -86,10 +97,16 @@ list(
   ),
   tar_target(
     hcpd_exclusion_src,
-    "data/exclusion/hcp_dev.csv",
+    "data/exclusion/HCD_LS2.0_anat_anomalies_Rad_reads.xlsx",
     format = "file"
   ),
-  tar_target(hcpd_exclusion, get_hcpd_exclusion(hcpd_exclusion_src)),
+  tar_target(hcpd_exclusion, get_hcp_ls_exclusion_by_other(hcpd_exclusion_src)),
+  tar_target(
+    hcpa_exclusion_src,
+    "data/exclusion/HCA_LS2.0_anat_anomalies_Rad_reads.xlsx",
+    format = "file"
+  ),
+  tar_target(hcpa_exclusion, get_hcp_ls_exclusion_by_other(hcpa_exclusion_src)),
   tar_target(hcpd, get_hcp(hcpd_source, hcpd_exclusion)),
   tar_target(
     abcd_source,
@@ -98,7 +115,7 @@ list(
   ),
   tar_target(
     abcd_exclusion,
-    get_abcd_exclusion(abcd_source, abcd_demographics)
+    get_abcd_exclusion_demographics(abcd_source, abcd_demographics)
   ),
   tar_target(
     abcd_events_src,
@@ -147,7 +164,7 @@ list(
   ),
   tar_target(
     hcpya_demographics,
-    get_hcpya_demographics(hcpya_unrestricted, hcpya_restricted)
+    get_hcpya_demographics(hcpya_unrestricted, hcpya_restricted, hcpya)
   ),
   tar_target(
     spacetop_demographics_src,
@@ -158,8 +175,8 @@ list(
     spacetop_demographics,
     get_spacetop_demographics(spacetop_demographics_src)
   ),
-  tar_target(hcpdev_demographics, get_hcp_dev_demographics()),
-  tar_target(hcpaging_demographics, get_hcp_aging_demographics()),
+  tar_target(hcpd_demographics, get_hcpd_demographics(hcpd)),
+  tar_target(hcpa_demographics, get_hcpa_demographics(hcpa)),
   tar_target(abcd_demographics, get_abcd_demographics(abcd_source)),
   tar_target(
     demographics,
@@ -167,8 +184,8 @@ list(
       ukb = ukb_demographics,
       hcpya = hcpya_demographics,
       spacetop = spacetop_demographics,
-      hcpdev = hcpdev_demographics,
-      hcpaging = hcpaging_demographics,
+      hcpdev = hcpd_demographics,
+      hcpaging = hcpa_demographics,
       abcd = abcd_demographics
     ),
     format = "parquet"
@@ -193,7 +210,7 @@ list(
   ),
   tar_target(
     hcpa_spectrum,
-    get_hcpa_spectrum(src = hcpa_spectrum_src, by_run = by_run)
+    get_hcpa_spectrum(src = hcpa_spectrum_src, hcpa = hcpa)
   ),
   tar_target(
     hcpd_spectrum_src,
@@ -202,7 +219,7 @@ list(
   ),
   tar_target(
     hcpd_spectrum,
-    get_hcpd_spectrum(src = hcpd_spectrum_src, by_run = by_run, hcpd_exclusion)
+    get_hcpd_spectrum(hcpd_spectrum_src, hcpd)
   ),
   tar_target(
     hcpya_spectrum_src,
@@ -211,11 +228,7 @@ list(
   ),
   tar_target(
     hcpya_spectrum,
-    get_hcpya_spectrum(
-      src = hcpya_spectrum_src,
-      by_run = by_run,
-      excluded = hcpya_exclusion
-    )
+    get_hcpya_spectrum(src = hcpya_spectrum_src, hcpya = hcpya)
   ),
   tar_target(
     abcd_spectrum_src,
@@ -224,11 +237,7 @@ list(
   ),
   tar_target(
     abcd_spectrum,
-    get_abcd_spectrum(
-      src = abcd_spectrum_src,
-      by_run = by_run,
-      excluded = abcd_exclusion
-    )
+    get_abcd_spectrum(src = abcd_spectrum_src, abcd = abcd)
   ),
   tar_target(
     spacetop_spectrum_src,
@@ -239,8 +248,20 @@ list(
     spacetop_spectrum,
     get_spacetop_spectrum(
       src = spacetop_spectrum_src,
-      by_run = by_run,
-      excluded = spacetop_exclusion
+      spacetop = spacetop
+    )
+  ),
+  tar_target(
+    spectrums,
+    bind_spectrum(
+      list(
+        hcpya = hcpya_spectrum,
+        hcpa = hcpa_spectrum,
+        hcpd = hcpd_spectrum,
+        spacetop = spacetop_spectrum,
+        abcd = abcd_spectrum
+      ),
+      by_run
     )
   ),
   tar_target(mriqc_src, "data/bold", format = "file"),
@@ -250,7 +271,7 @@ list(
       make_fig_demographics(by_run, demographics, mriqc_src),
       "figures/age-chart.png",
       width = 6.5,
-      height = 4
+      height = 5
     ),
     packages = c("patchwork", "ggplot2"),
     format = "file"
@@ -356,9 +377,7 @@ list(
   tar_target(
     fig_by_run,
     write_png(
-      make_fig_by_run(
-        by_run = by_run
-      ),
+      make_fig_by_run(by_run = by_run, demographics = demographics),
       "figures/by-run.png",
       width = 6.5,
       height = 7.7
@@ -473,11 +492,7 @@ list(
     get_qc_fd_ukb_real(ukb, ukb_subs),
     deployment = "main"
   ),
-  tarchetypes::tar_group_by(
-    qc_fd_ukb_real,
-    qc_fd_ukb_real0,
-    sub
-  ),
+  tarchetypes::tar_group_by(qc_fd_ukb_real, qc_fd_ukb_real0, sub),
   tar_target(iter, seq_len(10), format = "qs"),
   tar_target(
     qc_fd_ukb0,

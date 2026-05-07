@@ -73,7 +73,7 @@ factorize_ses <- function(.d) {
           "2",
           "3",
           "4",
-          "baseline",
+          "Baseline",
           "Year2",
           "Year4"
         ),

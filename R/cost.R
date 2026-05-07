@@ -42,7 +42,7 @@ plot_cost <- function(by_run) {
   by_run |>
     dplyr::filter(
       task == "rest",
-      ses == "baseline" | stringr::str_detect(dataset, "abcd", TRUE),
+      ses == "Baseline" | stringr::str_detect(dataset, "abcd", TRUE),
       ses == "2" | stringr::str_detect(dataset, "ukb", TRUE),
       !filtered,
       scan == "1"
@@ -82,7 +82,7 @@ plot_cost_lost <- function(by_run) {
   by_run |>
     dplyr::filter(
       task == "rest",
-      ses == "baseline" | stringr::str_detect(dataset, "abcd", TRUE),
+      ses == "Baseline" | stringr::str_detect(dataset, "abcd", TRUE),
       ses == "2" | stringr::str_detect(dataset, "ukb", TRUE),
       !filtered,
       scan == "1"
@@ -123,7 +123,7 @@ plot_acc_decrease <- function(by_run, params) {
   by_run |>
     dplyr::filter(
       task == "rest",
-      ses == "baseline" | stringr::str_detect(dataset, "abcd", TRUE),
+      ses == "Baseline" | stringr::str_detect(dataset, "abcd", TRUE),
       ses == "2" | stringr::str_detect(dataset, "ukb", TRUE),
       !filtered,
       scan == "1"

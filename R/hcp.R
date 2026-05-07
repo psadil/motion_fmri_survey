@@ -135,7 +135,13 @@ get_hcp <- function(src, exclusion = NULL) {
   if (!is.null(exclusion)) {
     out <- dplyr::anti_join(out, exclusion)
   }
-  out
+  unexpected <- get_unexpected_lengths(out)
+
+  out |>
+    dplyr::anti_join(
+      unexpected,
+      by = dplyr::join_by(sub, task, scan, ses)
+    )
 }
 
 get_hcpad_ses <- function(srcs) {
@@ -356,16 +362,11 @@ get_hcpya_events <- function(src, hcpya) {
     dplyr::mutate(scan = factor(scan, ordered = TRUE))
 }
 
-get_exclude_hcp <- function(path) {
-  readr::read_csv(
-    path,
-    col_select = c("sub" = "Subject", "QC_Issue")
-  ) |>
-    dplyr::filter(!is.na(QC_Issue)) |>
-    dplyr::select(sub)
-}
-
-get_hcpya_demographics <- function(hcpya_unrestricted, hcpya_restricted) {
+get_hcpya_demographics <- function(
+  hcpya_unrestricted,
+  hcpya_restricted,
+  hcpya
+) {
   hcpya_un <- readr::read_csv(hcpya_unrestricted) |>
     dplyr::select(sub = Subject, gender = Gender)
 
@@ -378,7 +379,8 @@ get_hcpya_demographics <- function(hcpya_unrestricted, hcpya_restricted) {
       bmi = BMI
     ) |>
     dplyr::left_join(hcpya_un, by = dplyr::join_by(sub)) |>
-    dplyr::mutate(sub = as.character(sub))
+    do_casting() |>
+    dplyr::semi_join(dplyr::distinct(hcpya, sub))
 }
 
 get_bmi_from_vitals <- function(src) {
@@ -392,7 +394,7 @@ get_bmi_from_vitals <- function(src) {
 }
 
 
-get_hcp_aging_demographics <- function() {
+get_hcpa_demographics <- function(hcpa) {
   vitals <- get_bmi_from_vitals("data/demographics/HCPAgingRec_vitals01.txt")
 
   read_nda(here::here("data/demographics/HCPAgingRec_ndar_subject01.txt")) |>
@@ -408,16 +410,20 @@ get_hcp_aging_demographics <- function() {
     dplyr::mutate(
       age = age / 12,
       sub = stringr::str_remove(sub, "HCA") |> as.integer() |> as.character()
-    )
+    ) |>
+    do_casting() |>
+    dplyr::semi_join(dplyr::distinct(hcpa, sub))
 }
 
-get_hcp_dev_demographics <- function() {
+get_hcpd_demographics <- function(hcpd) {
   vitals <- get_bmi_from_vitals(
     "data/demographics/HCPDevelopmentRec_vitals01.txt"
   )
-  read_nda(here::here(
-    "data/demographics/HCPDevelopmentRec_ndar_subject01.txt"
-  )) |>
+  read_nda(
+    here::here(
+      "data/demographics/HCPDevelopmentRec_ndar_subject01.txt"
+    )
+  ) |>
     dplyr::select(
       sub = src_subject_id,
       age = interview_age,
@@ -430,38 +436,31 @@ get_hcp_dev_demographics <- function() {
     dplyr::mutate(
       age = age / 12,
       sub = stringr::str_remove(sub, "HCD") |> as.integer() |> as.character()
-    )
-}
-
-get_hcpya_exclusion <- function(src) {
-  expected <- arrow::open_dataset(src) |>
-    dplyr::summarise(n_tr = max(t), .by = c(sub, task, ped)) |>
-    dplyr::count(n_tr, task, ped) |>
-    dplyr::collect() |>
-    dplyr::slice_max(
-      order_by = n,
-      n = 1,
-      with_ties = FALSE,
-      by = c(task, ped)
     ) |>
-    dplyr::select(-n)
-
-  arrow::open_dataset(src) |>
-    dplyr::summarise(n_tr = max(t), .by = c(sub, task, ped)) |>
-    dplyr::collect() |>
-    dplyr::anti_join(expected) |>
-    dplyr::select(sub, task, ped) |>
-    dplyr::mutate(sub = as.character(sub))
+    do_casting() |>
+    dplyr::semi_join(dplyr::distinct(hcpd, sub))
 }
 
-get_hcpd_exclusion <- function(src = "data/exclusion/hcp_dev.csv") {
-  readr::read_csv(src, col_types = "cccic") |>
+get_hcpya_exclusion_by_other <- function(src) {
+  readr::read_tsv(src, col_select = c("sub" = "Subject", "QC_Issue")) |>
+    dplyr::filter(stringr::str_detect(QC_Issue, "A|B|C")) |>
+    dplyr::select(sub) |>
+    dplyr::distinct() |>
+    do_casting()
+}
+
+get_hcp_ls_exclusion_by_other <- function(src) {
+  # downloaded from https://wiki.humanconnectome.org/docs/HCP%20Lifespan%20Subjects%20with%20Identified%20Quality%20Control%20Issues%20(QC_Issue_Codes%20explained).html
+  readxl::read_xlsx(src, col_names = c("sub", "read", "released")) |>
+    dplyr::filter(is.na(released)) |>
     dplyr::mutate(
-      task = stringr::str_to_lower(task),
       sub = stringr::str_remove(sub, "HCD") |>
+        stringr::str_remove("HCA") |>
         as.integer() |>
         as.character()
-    )
+    ) |>
+    dplyr::select(sub) |>
+    na.omit()
 }
 
 
@@ -476,4 +475,32 @@ get_hcpya_events2 <- function(events, hcpya) {
         dplyr::select(-n),
       by = dplyr::join_by(task, ped)
     )
+}
+
+
+get_unexpected_lengths <- function(d) {
+  expected <- d |>
+    dplyr::summarise(
+      n_tr = max(t),
+      .by = c(sub, task, ses, scan)
+    ) |>
+    dplyr::count(n_tr, task, ses, scan) |>
+    dplyr::slice_max(
+      order_by = n,
+      n = 1,
+      with_ties = FALSE,
+      by = c(task, ses, scan)
+    ) |>
+    dplyr::select(-n)
+
+  d |>
+    dplyr::summarise(
+      n_tr = max(t),
+      .by = c(sub, task, ses, scan)
+    ) |>
+    dplyr::anti_join(
+      expected,
+      by = dplyr::join_by(task, ses, scan, n_tr)
+    ) |>
+    dplyr::select(sub, task, ses, scan)
 }

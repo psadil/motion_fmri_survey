@@ -172,7 +172,7 @@ d <- lost_strict2 |>
     !filtered,
     task == "rest",
     scan == 1,
-    ses %in% c("baseline", "2", "1")
+    ses %in% c("Baseline", "2", "1")
   ) |>
   left_join(distinct(
     demographics,
@@ -289,7 +289,7 @@ splits <- by_run |>
     !filtered,
     scan == 1,
     dataset %in% c("abcd", "hcpya"),
-    ses %in% c("baseline", 1)
+    ses %in% c("Baseline", 1)
   ) |>
   mutate(
     group = if_else(loc > median(loc), "high", "low"),
@@ -299,7 +299,7 @@ splits <- by_run |>
 
 toshow <- demographics |>
   inner_join(splits) |>
-  filter(ses %in% c(1, "baseline")) |>
+  filter(ses %in% c(1, "Baseline")) |>
   rename(sex = sex_gender) |>
   mutate(sex = forcats::fct_drop(sex))
 
@@ -387,7 +387,7 @@ nih <- readr::read_csv("data/tabular/core/neurocognition/nc_y_nihtb.csv") |>
   mutate(
     ses = replace_values(
       ses,
-      "baseline_year_1_arm_1" ~ "baseline",
+      "baseline_year_1_arm_1" ~ "Baseline",
       "2_year_follow_up_y_arm_1" ~ "Year2",
       "4_year_follow_up_y_arm_1" ~ "Year4"
     ),
@@ -399,7 +399,7 @@ xsx <- readr::read_csv("data/tabular/core/imaging/mri_y_rsfmr_cor_gp_gp.csv") |>
   mutate(
     ses = replace_values(
       ses,
-      "baseline_year_1_arm_1" ~ "baseline",
+      "baseline_year_1_arm_1" ~ "Baseline",
       "2_year_follow_up_y_arm_1" ~ "Year2",
       "4_year_follow_up_y_arm_1" ~ "Year4"
     ),
@@ -470,3 +470,151 @@ plot_demo_tbl <- function(by_run, demographics, ds) {
 }
 
 purrr::walk(unique(by_run$dataset), ~ plot_demo_tbl(by_run, demographics, .x))
+
+# spectrum peaks table
+get_limits <- function(d, lower_exclude = 0.15, upper_exclude = 0.6) {
+  d |>
+    filter(between(freq, lower_exclude, upper_exclude), param == "trans_y") |>
+    slice_max(order_by = pxx, n = 1, by = c(sub, ses, ped, task)) |>
+    summarise(
+      freq = median(freq),
+      .by = c(sub, param, task)
+    ) |>
+    summarise(
+      lower = median(freq) |> round(2),
+      upper = quantile(freq, 0.75) |> round(2)
+    )
+}
+
+targets::tar_load(c(
+  demographics,
+  hcpa_spectrum,
+  hcpd_spectrum,
+  hcpya_spectrum,
+  spacetop_spectrum
+))
+
+get_limits(hcpa_spectrum)
+hcpd_spectrum |>
+  left_join(
+    demographics |>
+      filter(dataset == "hcpd") |>
+      distinct(sub, ses, age)
+  ) |>
+  filter(age < 8) |>
+  get_limits()
+
+hcpd_spectrum |>
+  left_join(
+    demographics |>
+      filter(dataset == "hcpd") |>
+      distinct(sub, ses, age)
+  ) |>
+  filter(age >= 8) |>
+  get_limits()
+
+get_limits(hcpya_spectrum)
+get_limits(spacetop_spectrum)
+
+
+abcd <- arrow::read_parquet(
+  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/abcd_spectrum.parquet"
+) |>
+  filter(between(freq, 0.2, 0.6), param == "trans_y") |>
+  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task)) |>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task, ses)
+  )
+
+ukb <- arrow::read_parquet(
+  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/ukb_spectrum.parquet"
+) |>
+  filter(between(freq, 0.2, 0.6), param == "trans_y") |>
+  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task)) |>
+  summarise(
+    freq = median(freq),
+    .by = c(sub, task)
+  ) |>
+  summarise(
+    lower = median(freq),
+    upper = quantile(freq, 0.75),
+    .by = c(task)
+  )
+
+
+# comparison of ABCD with HCPD
+
+library(dplyr)
+targets::tar_load(c(by_run, demographics))
+
+d <- by_run |>
+  filter(
+    dataset %in% c("hcpd", "abcd"),
+    !filtered,
+    stringr::str_detect(task, "rest")
+  ) |>
+  left_join(distinct(
+    demographics,
+    dataset,
+    sub,
+    age,
+    ses,
+    bmi,
+    sex_gender
+  ))
+
+fit <- lme4::lmer(
+  loc ~ dataset + age * sex_gender * bmi + (1 | sub),
+  data = d
+)
+
+fit |> report::report()
+
+d2 <- by_run |>
+  filter(dataset %in% c("hcpd", "abcd"), !filtered) |>
+  left_join(
+    distinct(
+      demographics,
+      dataset,
+      sub,
+      age,
+      ses,
+      bmi,
+      sex_gender
+    )
+  ) |>
+  filter(age < 10)
+
+fit2 <- lme4::lmer(
+  loc ~ dataset + age * sex_gender * bmi + (1 | sub),
+  data = d2
+)
+
+fit2 |> report::report()
+
+fit3 <- lme4::lmer(
+  loc ~ dataset + age * bmi * sex_gender + (1 | sub),
+  data = d |>
+    mutate(
+      young = age < 8,
+      dataset = interaction(dataset, ses, young, drop = TRUE)
+    )
+)
+
+fit3 |> report::report()
+
+
+fit4 <- lme4::lmer(
+  loc ~ dataset + dataset:age + age * bmi * sex_gender + (1 | sub),
+  data = d
+)
+
+fit4 |> report::report()
+
+fit4 |>
+  report::report() |>
+  as.data.frame() |>
+  insight::format_table() |>
+  insight::export_table()

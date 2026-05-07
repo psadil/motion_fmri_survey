@@ -4,13 +4,14 @@ make_fig_demographics <- function(
   mriqc_src,
   base_size = 11
 ) {
-  mriqc <- arrow::open_dataset(mriqc_src) |>
+  mriqc <- duckplyr::read_parquet_duckdb(mriqc_src, prudence = "lavish") |>
+    dplyr::filter(stringr::str_detect(task_id, "rest")) |>
     dplyr::select(id = `_id`, fd_mean) |>
     dplyr::collect() |>
     dplyr::mutate(dataset = "mriqc")
 
   all_by_run <- by_run |>
-    dplyr::filter(filtered) |>
+    dplyr::filter(!filtered, stringr::str_detect(task, "rest")) |>
     dplyr::left_join(
       dplyr::distinct(
         demographics,
@@ -42,7 +43,7 @@ make_fig_demographics <- function(
       xmax = quantile(age, 0.025, na.rm = TRUE),
       .by = dataset
     ) |>
-    dplyr::mutate(y = seq(-.1, 0, by = 0.02))
+    dplyr::mutate(y = seq(-.08, 0, by = 0.02))
 
   a <- all_by_run |>
     ggplot2::ggplot(ggplot2::aes(x = age, color = dataset)) +
@@ -57,7 +58,8 @@ make_fig_demographics <- function(
     ) +
     ggplot2::geom_smooth(
       ggplot2::aes(y = loc, group = dataset),
-      method = "lm"
+      method = "lm",
+      formula = y ~ x
     ) +
     ggplot2::coord_cartesian(ylim = c(-0.1, 1)) +
     ggplot2::scale_color_viridis_d(name = NULL, option = "turbo") +
@@ -92,7 +94,8 @@ make_fig_demographics <- function(
     ) +
     ggplot2::geom_smooth(
       ggplot2::aes(y = loc, group = dataset),
-      method = "lm"
+      method = "lm",
+      formula = y ~ x
     ) +
     ggplot2::coord_cartesian(ylim = c(-0.1, 1)) +
     ggplot2::scale_color_viridis_d(
@@ -155,6 +158,7 @@ make_fig_demographics <- function(
     b +
     c +
     d +
+    patchwork::plot_annotation(tag_levels = "a", tag_suffix = ")") +
     patchwork::plot_layout(nrow = 2, guides = "collect") &
     ggplot2::theme(legend.position = "bottom", legend.box = "vertical")
 }
@@ -520,7 +524,12 @@ make_fig_by_time_spacetop <- function(
 }
 
 
-make_fig_by_run <- function(by_run, filtered = FALSE, base_size = 10) {
+make_fig_by_run <- function(
+  by_run,
+  demographics,
+  filtered = FALSE,
+  base_size = 10
+) {
   a <- by_run |>
     dplyr::filter(dataset == "hcpya", filtered == .env$filtered) |>
     ggplot2::ggplot(ggplot2::aes(y = task, color = scan, x = loc)) +
@@ -541,7 +550,16 @@ make_fig_by_run <- function(by_run, filtered = FALSE, base_size = 10) {
   b <- by_run |>
     dplyr::filter(!is.na(scan), filtered == .env$filtered) |>
     dplyr::filter(dataset == "hcpd") |>
+    dplyr::left_join(demographics, by = dplyr::join_by(dataset, sub, ses)) |>
+    dplyr::mutate(cohort = dplyr::if_else(age < 8, "5-7", "8+")) |>
     ggplot2::ggplot(ggplot2::aes(y = task, color = scan, x = loc)) +
+    ggplot2::facet_wrap(
+      ~cohort,
+      nrow = 2,
+      labeller = "label_both",
+      drop = TRUE,
+      scales = "free_y"
+    ) +
     ggplot2::geom_boxplot(
       outliers = FALSE,
       position = ggplot2::position_dodge(preserve = "single")
@@ -637,9 +655,9 @@ make_fig_by_run <- function(by_run, filtered = FALSE, base_size = 10) {
       design = "
     555544
     555544
-    223311
-    666666
-    666666
+    333111
+    666622
+    666622
     "
     ) +
     patchwork::plot_annotation() &
@@ -815,7 +833,7 @@ make_fig_cluster <- function(by_run, base_size = 10) {
       task == "rest",
       scan == 1,
       !filtered,
-      ses == "baseline"
+      ses == "Baseline"
     ) |>
     dplyr::mutate(split = loc > median(loc)) |>
     dplyr::select(sub, split)

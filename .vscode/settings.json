@@ -9,5 +9,6 @@
     },
     "ruff.nativeServer": "on",
     "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.autoImportCompletions": true
+    "python.analysis.autoImportCompletions": true,
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

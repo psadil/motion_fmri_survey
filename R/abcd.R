@@ -2,14 +2,15 @@ get_abcd <- function(sources, abcd_exclusion) {
   duckplyr::read_parquet_duckdb(sources, prudence = "lavish") |>
     do_casting() |>
     convert_abcd_ses() |>
-    dplyr::anti_join(abcd_exclusion, dplyr::join_by(sub, ses, task, run)) |>
+    dplyr::anti_join(abcd_exclusion, dplyr::join_by(sub, ses)) |>
     dplyr::filter(t > 0) |>
     dplyr::mutate(
       time = t * 0.8,
       ped = "AP",
       scan = run
     ) |>
-    dplyr::collect()
+    dplyr::collect() |>
+    exclude_bad_abcd_scan(sources)
 }
 
 convert_abcd_ses <- function(.d) {
@@ -17,13 +18,13 @@ convert_abcd_ses <- function(.d) {
     dplyr::mutate(
       ses = dplyr::replace_values(
         ses,
-        "baseline_year_1_arm_1" ~ "baseline",
+        "baseline_year_1_arm_1" ~ "Baseline",
         "2_year_follow_up_y_arm_1" ~ "Year2",
         "4_year_follow_up_y_arm_1" ~ "Year4"
       ),
       ses = dplyr::replace_values(
         ses,
-        "baselineYear1Arm1" ~ "baseline",
+        "baselineYear1Arm1" ~ "Baseline",
         "2YearFollowUpYArm1" ~ "Year2",
         "4YearFollowUpYArm1" ~ "Year4"
       )
@@ -198,9 +199,9 @@ get_abcd_demographics <- function(source) {
     tidyr::pivot_wider(names_from = ses, values_from = sex) |>
     dplyr::mutate(
       sex = dplyr::if_else(
-        is.na(baseline),
+        is.na(Baseline),
         `1_year_follow_up_y_arm_1`,
-        baseline
+        Baseline
       ),
       sex = dplyr::if_else(is.na(sex), Year2, sex),
       sex = dplyr::if_else(is.na(sex), `3_year_follow_up_y_arm_1`, sex),
@@ -236,7 +237,7 @@ get_abcd_demographics <- function(source) {
   dplyr::full_join(main, bmi, by = dplyr::join_by(sub, ses)) |>
     dplyr::full_join(sex, by = dplyr::join_by(sub)) |>
     dplyr::full_join(age, by = dplyr::join_by(sub, ses)) |>
-    dplyr::filter(ses %in% c("baseline", "Year2", "Year4")) |>
+    dplyr::filter(ses %in% c("Baseline", "Year2", "Year4")) |>
     dplyr::mutate(
       age = dplyr::if_else(is.na(age.y), age.x, age.y),
       sex = dplyr::if_else(is.na(sex.y), sex.x, sex.y),
@@ -863,7 +864,7 @@ get_abcd_exclusion_run <- function(sources) {
 
 get_abcd_exclusion_demographics <- function(source, demographics) {
   abcd_subs <- duckplyr::read_parquet_duckdb(source) |>
-    dplyr::distinct(sub, ses, task, run) |>
+    dplyr::distinct(sub, ses) |>
     convert_abcd_ses() |>
     do_casting()
 
@@ -881,8 +882,7 @@ get_abcd_exclusion_demographics <- function(source, demographics) {
     dplyr::collect()
 }
 
-
-get_abcd_exclusion <- function(source, demographics) {
+exclude_bad_abcd_scan <- function(d, source) {
   all_runs <- duckplyr::read_parquet_duckdb(source) |>
     dplyr::distinct(sub, task, ses, run) |>
     dplyr::collect() |>
@@ -910,13 +910,11 @@ get_abcd_exclusion <- function(source, demographics) {
       by = dplyr::join_by(sub, task, ses, run)
     )
 
-  from_demographics <- get_abcd_exclusion_demographics(source, demographics)
-  dplyr::bind_rows(
+  to_exclude <- dplyr::bind_rows(
     list(
       atypical_length = too_short,
       official = official,
       extra_runs = runs,
-      missing_demographics = from_demographics,
       too_long = too_long
     ),
     .id = "notes"
@@ -925,4 +923,7 @@ get_abcd_exclusion <- function(source, demographics) {
       notes = stringr::str_c(notes, collapse = "|"),
       .by = c(sub, ses, task, run)
     )
+
+  d |>
+    dplyr::anti_join(to_exclude, by = dplyr::join_by(sub, ses, task, run))
 }
