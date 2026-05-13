@@ -17,8 +17,8 @@ source("R/cost.R")
 
 targets::tar_option_set(
   trust_timestamps = TRUE,
-  format = "parquet"
-  # controller = crew::crew_controller_local(workers = 6)
+  format = "parquet",
+  controller = crew::crew_controller_local(workers = 12)
 )
 
 
@@ -28,42 +28,23 @@ list(
     "data/motion/derivatives/ukb.parquet",
     format = "file"
   ),
-  tar_target(
-    ukb_exclusion_src,
-    "data/exclusion/ukb_exclusion.tsv",
-    format = "file"
-  ),
-  tar_target(
-    ukb_exclusion,
-    get_ukb_exclusion(ukb_exclusion_src),
-    deployment = "main"
-  ),
   tar_target(ukb_eprime, "data/25748_2_0.txt", format = "file"),
   tar_target(ukb_responses, get_ukb_responses(ukb_eprime)),
   tar_target(hcpya_events, get_hcpya_events("data/hcp_evs", hcpya)),
-  tar_target(ukb, get_ukb(ukb_source, ukb_exclusion)),
   tar_target(ukb_beh, "data/ukb677207_bulk.parquet", format = "file"),
   tar_target(ukb_events, get_ukb_design()),
+  tar_target(
+    ukb_exclusion,
+    get_ukb_exclusion(bulk = ukb_beh),
+    deployment = "main"
+  ),
+  tar_target(ukb, get_ukb(src = ukb_source, exclusion = ukb_exclusion)),
   tar_target(
     spacetop_source,
     "data/motion/derivatives/spacetop.parquet",
     format = "file"
   ),
-  tar_target(
-    spacetop_exclusion_src,
-    "data/exclusion/Spacetop_exclusions.rds",
-    format = "file"
-  ),
-  tar_target(
-    spacetop_exclusion,
-    get_spacetop_exclusion(spacetop_exclusion_src),
-    deployment = "main"
-  ),
-  tar_target(
-    spacetop,
-    get_spacetop(spacetop_source, spacetop_exclusion),
-    deployment = "main"
-  ),
+  tar_target(spacetop, get_spacetop(spacetop_source), deployment = "main"),
   tar_target(
     hcpya_source,
     "data/motion/derivatives/hcpya.parquet",
@@ -126,16 +107,14 @@ list(
   tar_target(abcd, get_abcd(abcd_source, abcd_exclusion)),
   tarchetypes::tar_group_by(
     datasets,
-    bind_datasets(
-      list(
-        hcpya = hcpya,
-        hcpa = hcpa,
-        hcpd = hcpd,
-        ukb = ukb,
-        abcd = abcd,
-        spacetop = spacetop
-      )
-    ),
+    bind_datasets(list(
+      hcpya = hcpya,
+      hcpa = hcpa,
+      hcpd = hcpd,
+      ukb = ukb,
+      abcd = abcd,
+      spacetop = spacetop
+    )),
     dataset,
     deployment = "main"
   ),
@@ -151,7 +130,7 @@ list(
     pattern = map(datasets),
     deployment = "main"
   ),
-  tar_target(ukb_demographics, get_ukb_demographics(ukb_beh, ukb_source)),
+  tar_target(ukb_demographics, get_ukb_demographics(ukb_beh)),
   tar_target(
     hcpya_unrestricted,
     "data/unrestricted_martin_2_5_2024_10_18_12.csv",
@@ -181,12 +160,15 @@ list(
   tar_target(
     demographics,
     get_demographics(
-      ukb = ukb_demographics,
-      hcpya = hcpya_demographics,
-      spacetop = spacetop_demographics,
-      hcpdev = hcpd_demographics,
-      hcpaging = hcpa_demographics,
-      abcd = abcd_demographics
+      datasets = list(
+        ukb = ukb_demographics,
+        hcpya = hcpya_demographics,
+        spacetop = spacetop_demographics,
+        hcpd = hcpd_demographics,
+        hcpa = hcpa_demographics,
+        abcd = abcd_demographics
+      ),
+      by_run = by_run
     ),
     format = "parquet"
   ),
@@ -217,10 +199,7 @@ list(
     "data/motion/derivatives/hcpd_spectrum.parquet",
     format = "file"
   ),
-  tar_target(
-    hcpd_spectrum,
-    get_hcpd_spectrum(hcpd_spectrum_src, hcpd)
-  ),
+  tar_target(hcpd_spectrum, get_hcpd_spectrum(hcpd_spectrum_src, hcpd)),
   tar_target(
     hcpya_spectrum_src,
     "data/motion/derivatives/hcpya_spectrum.parquet",
@@ -246,23 +225,30 @@ list(
   ),
   tar_target(
     spacetop_spectrum,
-    get_spacetop_spectrum(
-      src = spacetop_spectrum_src,
-      spacetop = spacetop
-    )
+    get_spacetop_spectrum(src = spacetop_spectrum_src, spacetop = spacetop)
+  ),
+  tar_target(
+    ukb_spectrum_src,
+    "data/motion/derivatives/ukb_spectrum.parquet",
+    format = "file"
+  ),
+  tar_target(ukb_spectrum, get_ukb_spectrum(src = ukb_spectrum_src, ukb = ukb)),
+  tarchetypes::tar_group_by(
+    spectrums0,
+    bind_spectrum(list(
+      hcpya = hcpya_spectrum,
+      hcpa = hcpa_spectrum,
+      hcpd = hcpd_spectrum,
+      spacetop = spacetop_spectrum,
+      abcd = abcd_spectrum,
+      ukb = ukb_spectrum
+    )),
+    dataset
   ),
   tar_target(
     spectrums,
-    bind_spectrum(
-      list(
-        hcpya = hcpya_spectrum,
-        hcpa = hcpa_spectrum,
-        hcpd = hcpd_spectrum,
-        spacetop = spacetop_spectrum,
-        abcd = abcd_spectrum
-      ),
-      by_run
-    )
+    rescale_spectrum(spectrums0, by_run),
+    pattern = map(spectrums0)
   ),
   tar_target(mriqc_src, "data/bold", format = "file"),
   tar_target(
@@ -350,10 +336,7 @@ list(
   tar_target(
     fig_by_time_abcd,
     write_png(
-      make_fig_by_time_abcd(
-        abcd_events = abcd_events2,
-        by_time = by_time
-      ),
+      make_fig_by_time_abcd(abcd_events = abcd_events2, by_time = by_time),
       "figures/by-time-abcd.png",
       width = 5,
       height = 4
@@ -364,9 +347,7 @@ list(
   tar_target(
     fig_by_time_spacetop,
     write_png(
-      make_fig_by_time_spacetop(
-        by_time = by_time
-      ),
+      make_fig_by_time_spacetop(by_time = by_time),
       "figures/by-time-spacetop.png",
       width = 5,
       height = 3
@@ -500,24 +481,24 @@ list(
     pattern = cross(qc_fd_ukb_real, iter)
   ),
   tar_target(type_id, c("clean", "raw", "rawraw"), format = "qs"), # for ukb timeseries
-  tar_target(
-    qc_ukb,
-    get_cor_by_thresh(
-      d = qc_fd_ukb,
-      timeseries_src = timeseries_src,
-      type_id = type_id
-    ),
-    pattern = cross(qc_fd_ukb, type_id)
-  ),
-  tar_target(
-    qc_ukb_summary,
-    get_cor_by_thresh_summary(
-      qc_ukb,
-      real = qc_fd_ukb_real,
-      timeseries_src = timeseries_src
-    ),
-    pattern = map(qc_ukb)
-  ),
+  # tar_target(
+  #   qc_ukb,
+  #   get_cor_by_thresh(
+  #     d = qc_fd_ukb,
+  #     timeseries_src = timeseries_src,
+  #     type_id = type_id
+  #   ),
+  #   pattern = cross(qc_fd_ukb, type_id)
+  # ),
+  # tar_target(
+  #   qc_ukb_summary,
+  #   get_cor_by_thresh_summary(
+  #     qc_ukb,
+  #     real = qc_fd_ukb_real,
+  #     timeseries_src = timeseries_src
+  #   ),
+  #   pattern = map(qc_ukb)
+  # ),
   tarchetypes::tar_group_by(
     qc_fd_ukb,
     tidyr::crossing(qc_fd_ukb0, threshold = seq(0.01, .2, by = 0.02)),
@@ -535,11 +516,7 @@ list(
   ),
   tar_target(
     mac0,
-    get_mac(
-      mac_prep,
-      real = qc_fd_ukb_real,
-      timeseries_src = timeseries_src
-    ),
+    get_mac(mac_prep, real = qc_fd_ukb_real, timeseries_src = timeseries_src),
     pattern = map(mac_prep)
   ),
   tar_target(
@@ -554,12 +531,7 @@ list(
   ),
   tar_target(
     fig_mac,
-    write_png(
-      make_fig_mac(mac),
-      "figures/mac.png",
-      width = 6,
-      height = 3
-    ),
+    write_png(make_fig_mac(mac), "figures/mac.png", width = 6, height = 3),
     format = "file"
   )
   # tar_target(

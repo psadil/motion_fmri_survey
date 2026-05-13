@@ -291,10 +291,7 @@ splits <- by_run |>
     dataset %in% c("abcd", "hcpya"),
     ses %in% c("Baseline", 1)
   ) |>
-  mutate(
-    group = if_else(loc > median(loc), "high", "low"),
-    .by = c(dataset)
-  ) |>
+  mutate(group = if_else(loc > median(loc), "high", "low"), .by = c(dataset)) |>
   select(dataset, sub, group, loc)
 
 toshow <- demographics |>
@@ -422,10 +419,7 @@ predictor_vars <- nih |> select(-sub, -ses) |> names()
 outcome_vars <- xsx |> select(-sub, -ses) |> names()
 
 get_cors <- function(d, predictor_vars, outcome_vars) {
-  cors <- expand_grid(
-    predictor = predictor_vars,
-    outcome = outcome_vars
-  ) |>
+  cors <- expand_grid(predictor = predictor_vars, outcome = outcome_vars) |>
     mutate(
       # Use map2_dbl to iterate over the two columns simultaneously
       correlation = purrr::map2(
@@ -476,10 +470,7 @@ get_limits <- function(d, lower_exclude = 0.15, upper_exclude = 0.6) {
   d |>
     filter(between(freq, lower_exclude, upper_exclude), param == "trans_y") |>
     slice_max(order_by = pxx, n = 1, by = c(sub, ses, ped, task)) |>
-    summarise(
-      freq = median(freq),
-      .by = c(sub, param, task)
-    ) |>
+    summarise(freq = median(freq), .by = c(sub, param, task)) |>
     summarise(
       lower = median(freq) |> round(2),
       upper = quantile(freq, 0.75) |> round(2)
@@ -497,18 +488,14 @@ targets::tar_load(c(
 get_limits(hcpa_spectrum)
 hcpd_spectrum |>
   left_join(
-    demographics |>
-      filter(dataset == "hcpd") |>
-      distinct(sub, ses, age)
+    demographics |> filter(dataset == "hcpd") |> distinct(sub, ses, age)
   ) |>
   filter(age < 8) |>
   get_limits()
 
 hcpd_spectrum |>
   left_join(
-    demographics |>
-      filter(dataset == "hcpd") |>
-      distinct(sub, ses, age)
+    demographics |> filter(dataset == "hcpd") |> distinct(sub, ses, age)
   ) |>
   filter(age >= 8) |>
   get_limits()
@@ -533,21 +520,35 @@ ukb <- arrow::read_parquet(
 ) |>
   filter(between(freq, 0.2, 0.6), param == "trans_y") |>
   slice_max(order_by = pxx, n = 1, by = c(sub, ses, task)) |>
-  summarise(
-    freq = median(freq),
-    .by = c(sub, task)
-  ) |>
-  summarise(
-    lower = median(freq),
-    upper = quantile(freq, 0.75),
-    .by = c(task)
-  )
+  summarise(freq = median(freq), .by = c(sub, task)) |>
+  summarise(lower = median(freq), upper = quantile(freq, 0.75), .by = c(task))
 
 
 # comparison of ABCD with HCPD
 
 library(dplyr)
+library(tidyr)
 targets::tar_load(c(by_run, demographics))
+
+
+bpm <- readr::read_csv("data/tabular/core/mental-health/mh_t_bpm.csv") |>
+  select(
+    sub = src_subject_id,
+    ses = eventname,
+    bpm_t_scr_external_t,
+    bpm_t_scr_internal_t,
+    bpm_t_scr_attention_t
+  ) |>
+  filter(
+    !(ses %in% c("1_year_follow_up_y_arm_1", "3_year_follow_up_y_arm_1"))
+  ) |>
+  mutate(sub = stringr::str_remove(sub, "_")) |>
+  convert_abcd_ses() |>
+  pivot_longer(bpm_t_scr_external_t:bpm_t_scr_attention_t) |>
+  na.omit() |>
+  summarise(value = mean(value), .by = c(sub, name)) |>
+  pivot_wider()
+
 
 d <- by_run |>
   filter(
@@ -555,36 +556,22 @@ d <- by_run |>
     !filtered,
     stringr::str_detect(task, "rest")
   ) |>
-  left_join(distinct(
-    demographics,
-    dataset,
-    sub,
-    age,
-    ses,
-    bmi,
-    sex_gender
-  ))
+  left_join(distinct(demographics, dataset, sub, age, ses, bmi, sex)) |>
+  left_join(bpm) |>
+  mutate(across(contains("bpm_t_scr"), ~ if_else(is.na(.x), 0, .x))) |>
+  mutate(
+    external = bpm_t_scr_external_t > 65,
+    internal = bpm_t_scr_internal_t > 65,
+    attention = bpm_t_scr_attention_t > 65,
+  )
 
-fit <- lme4::lmer(
-  loc ~ dataset + age * sex_gender * bmi + (1 | sub),
-  data = d
-)
+fit <- lme4::lmer(loc ~ dataset + age * sex_gender * bmi + (1 | sub), data = d)
 
 fit |> report::report()
 
 d2 <- by_run |>
   filter(dataset %in% c("hcpd", "abcd"), !filtered) |>
-  left_join(
-    distinct(
-      demographics,
-      dataset,
-      sub,
-      age,
-      ses,
-      bmi,
-      sex_gender
-    )
-  ) |>
+  left_join(distinct(demographics, dataset, sub, age, ses, bmi, sex_gender)) |>
   filter(age < 10)
 
 fit2 <- lme4::lmer(
@@ -607,7 +594,7 @@ fit3 |> report::report()
 
 
 fit4 <- lme4::lmer(
-  loc ~ dataset + dataset:age + age * bmi * sex_gender + (1 | sub),
+  loc ~ dataset + dataset:age + age * bmi * sex + (1 | sub),
   data = d
 )
 
@@ -618,3 +605,54 @@ fit4 |>
   as.data.frame() |>
   insight::format_table() |>
   insight::export_table()
+
+
+fit5 <- lme4::lmer(
+  loc ~ external +
+    internal +
+    attention +
+    dataset +
+    dataset:age +
+    age * bmi * sex +
+    (1 | sub),
+  data = d
+)
+
+fit5 |> report::report()
+
+
+# abcd lost by race/ethnicity
+dd <- readr::read_csv(
+  "data/tabular/core/abcd-general/abcd_p_demo.csv",
+  show_col_types = FALSE
+) |>
+  select(sub = src_subject_id, ses = eventname, race_ethnicity) |>
+  filter((ses == "baseline_year_1_arm_1")) |>
+  mutate(sub = stringr::str_remove(sub, "_")) |>
+  convert_abcd_ses() |>
+  mutate(
+    race_ethnicity = dplyr::recode_values(
+      race_ethnicity,
+      1 ~ "White",
+      2 ~ "Black",
+      3 ~ "Hispanic",
+      4 ~ "Asian",
+      5 ~ "Other"
+    )
+  )
+
+
+d <- targets::tar_read(lost_strict2) |>
+  filter(
+    !filtered,
+    ses == "Baseline",
+    dataset == "abcd",
+    task == "rest",
+    scan == 1
+  ) |>
+  select(sub, exclude) |>
+  left_join(dd)
+
+d |> gtsummary::tbl_summary(include = c(race_ethnicity))
+
+d |> gtsummary::tbl_summary(include = c(race_ethnicity), by = exclude)

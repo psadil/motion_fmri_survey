@@ -12,17 +12,15 @@ make_fig_demographics <- function(
 
   all_by_run <- by_run |>
     dplyr::filter(!filtered, stringr::str_detect(task, "rest")) |>
-    dplyr::left_join(
-      dplyr::distinct(
-        demographics,
-        dataset,
-        sub,
-        ses,
-        age,
-        sex_gender,
-        bmi
-      )
-    ) |>
+    dplyr::left_join(dplyr::distinct(
+      demographics,
+      dataset,
+      sub,
+      ses,
+      age,
+      sex,
+      bmi
+    )) |>
     dplyr::mutate(
       dataset = dplyr::replace_values(
         dataset,
@@ -35,7 +33,7 @@ make_fig_demographics <- function(
       ) |>
         as.factor()
     ) |>
-    dplyr::rename(sex = sex_gender)
+    dplyr::rename(sex = sex)
 
   ranges <- all_by_run |>
     dplyr::summarise(
@@ -173,18 +171,14 @@ plot_hcp_fd <- function(
   hcpya_events <- hcpya_events |>
     dplyr::mutate(scan = glue::glue("Scan: {scan}"))
 
-  hcp_tmp <- hcp_tmp |>
-    dplyr::mutate(scan = glue::glue("Scan: {scan}"))
+  hcp_tmp <- hcp_tmp |> dplyr::mutate(scan = glue::glue("Scan: {scan}"))
 
   hcp_tmp |>
     dplyr::filter(stringr::str_detect(task, .env$task)) |>
     ggplot2::ggplot(ggplot2::aes(x = time, y = median)) +
     ggplot2::facet_grid(scan ~ task, scales = "free_x") +
     ggplot2::geom_rect(
-      data = dplyr::filter(
-        hcpya_events,
-        stringr::str_detect(task, .env$task)
-      ),
+      data = dplyr::filter(hcpya_events, stringr::str_detect(task, .env$task)),
       ggplot2::aes(
         xmin = onset,
         xmax = onset + duration,
@@ -350,11 +344,9 @@ make_fig_by_time_hcpya <- function(
   filtered = FALSE,
   base_size = 11
 ) {
-  by_time <- by_time |>
-    dplyr::filter(filtered == .env$filtered)
+  by_time <- by_time |> dplyr::filter(filtered == .env$filtered)
 
-  hcp_tmp <- by_time |>
-    dplyr::filter(dataset == "hcpya")
+  hcp_tmp <- by_time |> dplyr::filter(dataset == "hcpya")
 
   a <- plot_hcp_fd(
     hcp_tmp,
@@ -437,11 +429,7 @@ make_fig_by_time_ukb <- function(
         type = stringr::str_to_lower(type),
         task = "faces/shapes"
       ),
-      ggplot2::aes(
-        xmin = onset,
-        xmax = onset + duration,
-        fill = type
-      ),
+      ggplot2::aes(xmin = onset, xmax = onset + duration, fill = type),
       ymax = Inf,
       ymin = -Inf,
       alpha = 0.2
@@ -662,9 +650,7 @@ make_fig_by_run <- function(
     ) +
     patchwork::plot_annotation() &
     ggplot2::theme_gray(base_size = base_size) &
-    ggplot2::theme(
-      legend.position = "bottom"
-    )
+    ggplot2::theme(legend.position = "bottom")
 }
 
 make_fig_all_motion_exclusion <- function(
@@ -855,20 +841,11 @@ make_fig_cluster <- function(by_run, base_size = 10) {
       split = dplyr::if_else(split, "High Movers", "Low Movers") |>
         factor(levels = c("Low Movers", "High Movers"), ordered = TRUE)
     ) |>
-    ggplot2::ggplot(
-      ggplot2::aes(
-        x = scan,
-        y = avg,
-        group = split
-      )
-    ) +
+    ggplot2::ggplot(ggplot2::aes(x = scan, y = avg, group = split)) +
     ggplot2::facet_wrap(~task, scales = "free_x", nrow = 1) +
     ggplot2::geom_line(ggplot2::aes(linetype = split)) +
     ggplot2::geom_errorbar(
-      ggplot2::aes(
-        ymin = avg - 2 * sem,
-        ymax = avg + 2 * sem
-      ),
+      ggplot2::aes(ymin = avg - 2 * sem, ymax = avg + 2 * sem),
       alpha = 0.5
     ) +
     ggplot2::ylim(0, NA) +
@@ -889,13 +866,7 @@ make_fig_cluster <- function(by_run, base_size = 10) {
       split = dplyr::if_else(split, "High Movers", "Low Movers") |>
         factor(levels = c("Low Movers", "High Movers"), ordered = TRUE)
     ) |>
-    ggplot2::ggplot(
-      ggplot2::aes(
-        x = scan,
-        y = avg,
-        group = split
-      )
-    ) +
+    ggplot2::ggplot(ggplot2::aes(x = scan, y = avg, group = split)) +
     ggplot2::facet_grid(ses ~ task, scales = "free_x") +
     ggplot2::geom_line(ggplot2::aes(linetype = split)) +
     ggplot2::geom_errorbar(
@@ -911,27 +882,22 @@ make_fig_cluster <- function(by_run, base_size = 10) {
     b +
     patchwork::plot_layout(guides = "collect", ncol = 1, heights = c(1, 3)) +
     patchwork::plot_annotation(tag_levels = "a", tag_suffix = ")") &
-    ggplot2::theme(
-      legend.position = "bottom",
-      legend.box = "vertical"
-    )
+    ggplot2::theme(legend.position = "bottom", legend.box = "vertical")
 }
 
 
 make_fig_lost_by_group <- function(by_run, demographics, base_size = 10) {
   all_by_run <- by_run |>
     dplyr::filter(!filtered) |>
-    dplyr::left_join(
-      dplyr::distinct(
-        demographics,
-        dataset,
-        sub,
-        ses,
-        age,
-        sex_gender,
-        bmi
-      )
-    ) |>
+    dplyr::left_join(dplyr::distinct(
+      demographics,
+      dataset,
+      sub,
+      ses,
+      age,
+      sex,
+      bmi
+    )) |>
     dplyr::mutate(
       dataset = dplyr::replace_values(
         dataset,
@@ -944,7 +910,7 @@ make_fig_lost_by_group <- function(by_run, demographics, base_size = 10) {
       ) |>
         as.factor()
     ) |>
-    dplyr::rename(sex = sex_gender)
+    dplyr::rename(sex = sex)
 
   a <- all_by_run |>
     dplyr::mutate(
@@ -989,9 +955,7 @@ make_fig_lost_by_group <- function(by_run, demographics, base_size = 10) {
       labels = c(0, 0.5)
     ) +
     ggplot2::theme_gray(base_size = base_size) +
-    ggplot2::theme(
-      legend.position = "bottom"
-    )
+    ggplot2::theme(legend.position = "bottom")
 
   b <- all_by_run |>
     dplyr::mutate(
@@ -1024,9 +988,7 @@ make_fig_lost_by_group <- function(by_run, demographics, base_size = 10) {
       labels = c(0, 0.5)
     ) +
     ggplot2::theme_gray(base_size = base_size) +
-    ggplot2::theme(
-      legend.position = "bottom"
-    )
+    ggplot2::theme(legend.position = "bottom")
 
   a +
     b +
@@ -1142,7 +1104,8 @@ make_fig_power <- function(by_run, lost) {
       p = pwr::pwr.r.test(n = n, r = 0.1)$power,
       dataset = stringr::str_to_upper(dataset),
       ses = stringr::str_replace(ses, "^[[:digit:]]+", " "),
-      name = factor(name, levels = c("none", "lenient", "strict"))
+      name = factor(name, levels = c("none", "lenient", "strict")),
+      dataset = interaction(dataset, ses, drop = TRUE)
     ) |>
     ggplot2::ggplot(ggplot2::aes(x = name, y = p)) +
     ggplot2::geom_col(ggplot2::aes(fill = Filtered), position = "dodge") +

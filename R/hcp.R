@@ -135,13 +135,8 @@ get_hcp <- function(src, exclusion = NULL) {
   if (!is.null(exclusion)) {
     out <- dplyr::anti_join(out, exclusion)
   }
-  unexpected <- get_unexpected_lengths(out)
 
-  out |>
-    dplyr::anti_join(
-      unexpected,
-      by = dplyr::join_by(sub, task, scan, ses)
-    )
+  out |> truncate_to_modal_lengths()
 }
 
 get_hcpad_ses <- function(srcs) {
@@ -202,12 +197,8 @@ get_hcp_design0 <- function(src) {
   lengths <- purrr::map_dbl(.evs, fpeek::peek_count_lines)
   .evs <- .evs[lengths > 0]
 
-  batches <- tibble::tibble(
-    src = .evs
-  ) |>
-    dplyr::mutate(
-      batch = 1:dplyr::n() %% 10
-    ) |>
+  batches <- tibble::tibble(src = .evs) |>
+    dplyr::mutate(batch = 1:dplyr::n() %% 10) |>
     dplyr::group_nest(batch)
 
   purrr::map(
@@ -251,10 +242,7 @@ get_hcpya_events <- function(src, hcpya) {
     dplyr::filter(task == "WM") |>
     dplyr::filter(type %in% c("tools", "places", "faces", "body")) |>
     dplyr::arrange(onset) |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(ped, task, sub)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(ped, task, sub)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -266,10 +254,7 @@ get_hcpya_events <- function(src, hcpya) {
     dplyr::filter(task == "GAMBLING") |>
     dplyr::filter(type %in% c("win", "loss")) |>
     dplyr::arrange(onset) |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(ped, task, sub)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(ped, task, sub)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -281,10 +266,7 @@ get_hcpya_events <- function(src, hcpya) {
     dplyr::filter(task == "SOCIAL") |>
     dplyr::filter(type %in% c("rnd", "mental")) |>
     dplyr::arrange(onset) |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(ped, task, sub)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(ped, task, sub)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -296,10 +278,7 @@ get_hcpya_events <- function(src, hcpya) {
     dplyr::filter(task == "RELATIONAL") |>
     dplyr::filter(type %in% c("relation", "match")) |>
     dplyr::arrange(onset) |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(ped, task, sub)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(ped, task, sub)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -316,10 +295,7 @@ get_hcpya_events <- function(src, hcpya) {
       stringr::str_detect(path, "present", TRUE)
     ) |>
     dplyr::arrange(onset) |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(ped, task, sub, type)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(ped, task, sub, type)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -350,9 +326,7 @@ get_hcpya_events <- function(src, hcpya) {
       rel_hcp_stim,
       lang_hcp_stim
     ) |>
-    dplyr::mutate(
-      task = stringr::str_to_lower(task)
-    ) |>
+    dplyr::mutate(task = stringr::str_to_lower(task)) |>
     dplyr::left_join(
       dplyr::count(hcpya, task, scan, ped) |>
         dplyr::slice_max(order_by = n, n = 1, by = c(task, scan)) |>
@@ -368,7 +342,7 @@ get_hcpya_demographics <- function(
   hcpya
 ) {
   hcpya_un <- readr::read_csv(hcpya_unrestricted) |>
-    dplyr::select(sub = Subject, gender = Gender)
+    dplyr::select(sub = Subject, sex = Gender)
 
   readr::read_csv(hcpya_restricted) |>
     dplyr::select(
@@ -419,11 +393,9 @@ get_hcpd_demographics <- function(hcpd) {
   vitals <- get_bmi_from_vitals(
     "data/demographics/HCPDevelopmentRec_vitals01.txt"
   )
-  read_nda(
-    here::here(
-      "data/demographics/HCPDevelopmentRec_ndar_subject01.txt"
-    )
-  ) |>
+  read_nda(here::here(
+    "data/demographics/HCPDevelopmentRec_ndar_subject01.txt"
+  )) |>
     dplyr::select(
       sub = src_subject_id,
       age = interview_age,
@@ -466,41 +438,11 @@ get_hcp_ls_exclusion_by_other <- function(src) {
 
 get_hcpya_events2 <- function(events, hcpya) {
   events |>
-    dplyr::mutate(
-      task = stringr::str_to_lower(task)
-    ) |>
+    dplyr::mutate(task = stringr::str_to_lower(task)) |>
     dplyr::left_join(
       dplyr::count(hcpya, task, scan, ped) |>
         dplyr::slice_max(order_by = n, n = 1, by = c(task, scan)) |>
         dplyr::select(-n),
       by = dplyr::join_by(task, ped)
     )
-}
-
-
-get_unexpected_lengths <- function(d) {
-  expected <- d |>
-    dplyr::summarise(
-      n_tr = max(t),
-      .by = c(sub, task, ses, scan)
-    ) |>
-    dplyr::count(n_tr, task, ses, scan) |>
-    dplyr::slice_max(
-      order_by = n,
-      n = 1,
-      with_ties = FALSE,
-      by = c(task, ses, scan)
-    ) |>
-    dplyr::select(-n)
-
-  d |>
-    dplyr::summarise(
-      n_tr = max(t),
-      .by = c(sub, task, ses, scan)
-    ) |>
-    dplyr::anti_join(
-      expected,
-      by = dplyr::join_by(task, ses, scan, n_tr)
-    ) |>
-    dplyr::select(sub, task, ses, scan)
 }

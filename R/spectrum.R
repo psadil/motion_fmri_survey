@@ -1,11 +1,8 @@
 rescale <- function(.data, ...) {
   .data |>
-    dplyr::mutate(
-      avg = factor(avg, ordered = TRUE),
-      pxx = 10 * log10(pxx)
-    ) |>
+    dplyr::mutate(pxx = 10 * log10(pxx)) |>
     na.omit() |>
-    dplyr::group_nest(..., avg) |>
+    dplyr::group_nest(...) |>
     dplyr::mutate(
       data = purrr::map(
         data,
@@ -24,22 +21,17 @@ rescale <- function(.data, ...) {
       pxx = dplyr::if_else(pxx > upper, upper, pxx),
       .by = c(...)
     ) |>
-    dplyr::mutate(avg = as.numeric(as.character(avg))) |>
     dplyr::select(-lower, -upper)
 }
 
 .avg_by_run <- function(by_run) {
   by_run |>
     dplyr::filter(!filtered) |>
-    dplyr::summarise(
-      avg = median(loc),
-      .by = c(sub, dataset)
-    )
+    dplyr::summarise(avg = median(loc), .by = c(sub, dataset))
 }
 
 .clean <- function(.data, N = 100) {
-  .data |>
-    dplyr::semi_join(dplyr::count(.data, freq) |> dplyr::filter(n > N))
+  .data |> dplyr::semi_join(dplyr::count(.data, freq) |> dplyr::filter(n > N))
 }
 
 
@@ -146,11 +138,22 @@ get_spacetop_spectrum <- function(src, spacetop) {
     )
 }
 
-bind_spectrum <- function(datasets, by_run) {
-  dplyr::bind_rows(datasets, .id = "dataset") |>
+bind_spectrum <- function(spectrums) {
+  dplyr::bind_rows(spectrums, .id = "dataset") |> dplyr::select(-ped, -run)
+}
+
+rescale_spectrum <- function(spectrums, by_run) {
+  spectrums |>
+    rescale(param, dataset, sub, ses, task, scan) |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
+}
+
+get_ukb_spectrum <- function(src, ukb) {
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::mutate(ped = "AP", scan = 1, run = 1) |>
+    do_casting() |>
     dplyr::inner_join(
-      .avg_by_run(by_run),
-      by = dplyr::join_by(sub, dataset)
-    ) |>
-    rescale(task, ses, run, sub, param, scan, dataset)
+      dplyr::distinct(ukb, sub, task, run, ped, ses, scan),
+      by = dplyr::join_by(sub, ses, task, ped, run, scan)
+    )
 }

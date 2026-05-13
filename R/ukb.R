@@ -1,20 +1,18 @@
 get_ukb <- function(src, exclusion) {
   arrow::open_dataset(src) |>
     dplyr::filter(t > 0) |>
-    dplyr::mutate(
-      time = t * 0.735,
-      ped = "AP",
-      scan = 1L,
-    ) |>
+    dplyr::mutate(time = t * 0.735, ped = "AP", scan = 1L) |>
     dplyr::collect() |>
     add_run() |>
     do_casting() |>
-    dplyr::anti_join(exclusion, by = dplyr::join_by(sub, ses, task))
+    dplyr::anti_join(exclusion, by = dplyr::join_by(sub, ses)) |>
+    truncate_to_modal_lengths()
 }
 
-get_ukb_exclusion <- function(src) {
-  readr::read_tsv(src, col_types = "cccc") |>
-    dplyr::rename(sub = subject_id)
+get_ukb_exclusion <- function(bulk) {
+  get_ukb_demographics(bulk = bulk) |>
+    dplyr::filter(is.na(sex) | is.na(bmi) | is.na(age)) |>
+    dplyr::distinct(sub, ses)
 }
 
 
@@ -52,8 +50,7 @@ get_ukb_design <- function() {
 
 
 get_ukb_responses <- function(src) {
-  txt <- rprime::read_eprime(src) |>
-    rprime::FrameList()
+  txt <- rprime::read_eprime(src) |> rprime::FrameList()
 
   txt |>
     rprime::to_data_frame() |>
@@ -75,35 +72,9 @@ get_ukb_responses <- function(src) {
     dplyr::select(onset, task)
 }
 
-get_ukb_demographics <- function(bulk, ukb_source) {
-  subses <- duckplyr::read_parquet_duckdb(ukb_source) |>
-    dplyr::distinct(sub, ses) |>
-    dplyr::mutate(dplyr::across(
-      tidyselect::all_of(c("sub", "ses")),
-      as.integer
-    )) |>
-    dplyr::collect()
-
-  sites <- duckplyr::read_parquet_duckdb(bulk) |>
-    dplyr::select(
-      sub = eid,
-      site_2 = f.54.2.0,
-      site_3 = f.54.3.0
-    ) |>
-    tidyr::pivot_longer(
-      c(tidyselect::ends_with("_2"), tidyselect::ends_with("_3")),
-      names_to = "ses",
-      values_to = "site",
-      names_prefix = "site_"
-    ) |>
-    dplyr::mutate(ses = as.integer(ses))
-
+get_ukb_demographics <- function(bulk) {
   ages <- duckplyr::read_parquet_duckdb(bulk) |>
-    dplyr::select(
-      sub = eid,
-      age_2 = f.21003.2.0,
-      age_3 = f.21003.3.0
-    ) |>
+    dplyr::select(sub = eid, age_2 = f.21003.2.0, age_3 = f.21003.3.0) |>
     tidyr::pivot_longer(
       c(tidyselect::ends_with("_2"), tidyselect::ends_with("_3")),
       names_to = "ses",
@@ -117,18 +88,9 @@ get_ukb_demographics <- function(bulk, ukb_source) {
     dplyr::select(
       sub = eid,
       sex = f.31.0.0,
-      tidyselect::starts_with("f.21000"),
       bmi_2 = f.21001.2.0,
       bmi_3 = f.21001.3.0
     ) |>
-    dplyr::rename(ethnicity = f.21000.0.0) |>
-    dplyr::mutate(
-      ethnicity = dplyr::if_else(is.na(ethnicity), f.21000.1.0, ethnicity)
-    ) |>
-    dplyr::mutate(
-      ethnicity = dplyr::if_else(is.na(ethnicity), f.21000.2.0, ethnicity)
-    ) |>
-    dplyr::select(-tidyselect::starts_with("f.21000")) |>
     tidyr::pivot_longer(
       c(tidyselect::ends_with("_2"), tidyselect::ends_with("_3")),
       names_to = "ses",
@@ -137,8 +99,6 @@ get_ukb_demographics <- function(bulk, ukb_source) {
       values_ptypes = numeric()
     ) |>
     dplyr::mutate(ses = as.integer(ses)) |>
-    dplyr::semi_join(subses, by = dplyr::join_by(sub, ses)) |>
-    dplyr::left_join(sites, by = dplyr::join_by(sub, ses)) |>
     dplyr::left_join(ages, by = dplyr::join_by(sub, ses)) |>
     do_casting()
 }

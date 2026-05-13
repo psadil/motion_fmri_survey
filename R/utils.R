@@ -2,65 +2,22 @@ deg_2_rad <- function(rad) {
   rad * pi / 180
 }
 
-get_demographics <- function(
-  ukb,
-  hcpya,
-  spacetop,
-  hcpdev,
-  hcpaging,
-  abcd
-) {
-  dplyr::bind_rows(
-    list(
-      ukb = ukb,
-      hcpya = hcpya,
-      spacetop = spacetop,
-      hcpd = hcpdev,
-      hcpa = hcpaging,
-      abcd = abcd
-    ),
-    .id = "dataset"
-  ) |>
-    dplyr::mutate(
-      scanner = dplyr::if_else(
-        is.na(deviceserialnumber),
-        site,
-        deviceserialnumber
-      )
-    ) |>
-    dplyr::select(
-      dataset,
-      sub,
-      sex,
-      gender,
-      age,
-      race,
-      ethnicity,
-      scanner,
-      ses,
-      bmi
-    ) |>
-    dplyr::mutate(
-      dataset = factor(dataset),
-      sex = factor(sex),
-      gender = factor(gender),
-      race = factor(race),
-      ethnicity = factor(ethnicity),
-      scanner = factor(scanner)
-    ) |>
+get_demographics <- function(datasets, by_run) {
+  dplyr::bind_rows(datasets, .id = "dataset") |>
+    dplyr::select(dataset, sub, sex, age, ses, bmi) |>
+    dplyr::mutate(dataset = factor(dataset), sex = factor(sex)) |>
     dplyr::mutate(ses = dplyr::if_else(is.na(ses), "1", ses)) |>
     dplyr::distinct() |> # ABCD has some duplicates
     dplyr::mutate(
-      sex_gender = dplyr::if_else(is.na(sex), gender, sex),
-      sex_gender = dplyr::replace_values(
-        sex_gender,
-        "Male" ~ "M",
-        "Female" ~ "F"
-      ),
-      sub = stringr::str_remove(sub, "sub-")
+      sex = dplyr::replace_values(sex, "Male" ~ "M", "Female" ~ "F"),
+      sub = stringr::str_remove(sub, "sub-"),
+      ses = dplyr::if_else(is.na(ses), "1", ses)
     ) |>
-    dplyr::select(-sex, -gender) |>
-    factorize_ses()
+    factorize_ses() |>
+    dplyr::semi_join(
+      dplyr::distinct(by_run, dataset, sub, ses),
+      by = dplyr::join_by(dataset, sub, ses)
+    )
 }
 
 factorize_ses <- function(.d) {
@@ -68,15 +25,7 @@ factorize_ses <- function(.d) {
     dplyr::mutate(
       ses = factor(
         ses,
-        levels = c(
-          "1",
-          "2",
-          "3",
-          "4",
-          "Baseline",
-          "Year2",
-          "Year4"
-        ),
+        levels = c("1", "2", "3", "4", "Baseline", "Year2", "Year4"),
         ordered = TRUE
       )
     )
@@ -105,16 +54,14 @@ summarise_by_time <- function(.data) {
 
 add_run <- function(.data) {
   if (!"run" %in% names(.data)) {
-    .data <- .data |>
-      dplyr::mutate(run = 1L)
+    .data <- .data |> dplyr::mutate(run = 1L)
   }
   .data
 }
 
 add_ped <- function(.data) {
   if (!"ped" %in% names(.data)) {
-    .data <- .data |>
-      dplyr::mutate(ped = NA_character_)
+    .data <- .data |> dplyr::mutate(ped = NA_character_)
   }
   .data
 }
@@ -208,7 +155,10 @@ get_lost_strict <- function(
   max_fd_thresh = 5
 ) {
   n_subs <- by_run |>
-    dplyr::semi_join(dplyr::distinct(dataset, dataset)) |>
+    dplyr::semi_join(
+      dplyr::distinct(dataset, dataset),
+      by = dplyr::join_by(dataset)
+    ) |>
     dplyr::count(dataset, task, ses, scan, filtered, name = "n_sub")
 
   by_prop <- .summarize_by_prop(dataset, threshold = 0.2) |>
@@ -232,6 +182,10 @@ get_lost_strict <- function(
     dplyr::select(-n, -n_sub)
 
   by_avg <- by_run |>
+    dplyr::semi_join(
+      dplyr::distinct(dataset, dataset),
+      by = dplyr::join_by(dataset)
+    ) |>
     dplyr::filter(loc > mfd_thresh) |>
     dplyr::distinct(dataset, task, ses, sub, scan, filtered)
   by_avg2 <- by_avg |>
@@ -404,7 +358,8 @@ write_png <- function(p, file, width, height) {
     p,
     device = ragg::agg_png,
     width = width,
-    height = height
+    height = height,
+    create.dir = TRUE
   )
   file
 }
@@ -438,6 +393,10 @@ get_lost_strict_for_modeling <- function(
     dplyr::distinct(dataset, task, ses, sub, scan, filtered, exclude)
 
   by_avg <- by_run |>
+    dplyr::semi_join(
+      dplyr::distinct(dataset, dataset),
+      by = dplyr::join_by(dataset)
+    ) |>
     dplyr::mutate(exclude = loc > mfd_thresh) |>
     dplyr::distinct(dataset, task, ses, sub, scan, filtered, exclude)
 
@@ -448,4 +407,22 @@ get_lost_strict_for_modeling <- function(
     tidyr::pivot_wider(names_from = how, values_from = exclude) |>
     dplyr::mutate(exclude = max | avg | prop) |>
     dplyr::select(dataset, task, ses, sub, scan, filtered, exclude)
+}
+
+truncate_to_modal_lengths <- function(d) {
+  expected <- d |>
+    dplyr::summarise(n_tr = max(t), .by = c(sub, task, ses, scan)) |>
+    dplyr::count(n_tr, task, ses, scan) |>
+    dplyr::slice_max(
+      order_by = n,
+      n = 1,
+      with_ties = FALSE,
+      by = c(task, ses, scan)
+    ) |>
+    dplyr::select(-n)
+
+  d |>
+    dplyr::left_join(expected, by = dplyr::join_by(task, ses, scan)) |>
+    dplyr::filter(t <= n_tr) |>
+    dplyr::select(-n_tr)
 }

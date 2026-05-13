@@ -53,13 +53,11 @@ get_qc_src <- function(
   avg <- by_run |>
     dplyr::filter(dataset == "ukb", ses == "2", task == "rest", !filtered) |>
     dplyr::distinct(sub, loc) |>
-    dplyr::filter(
-      dplyr::between(
-        loc,
-        quantile(loc, quantile_range[1]),
-        quantile(loc, quantile_range[2])
-      )
-    )
+    dplyr::filter(dplyr::between(
+      loc,
+      quantile(loc, quantile_range[1]),
+      quantile(loc, quantile_range[2])
+    ))
 
   tibble::tibble(
     src = fs::dir_ls(timeseries_src, glob = "*arrow", recurse = TRUE)
@@ -79,13 +77,11 @@ get_qc_src_hcpya <- function(
   avg <- by_run |>
     dplyr::filter(dataset == "hcpya", task == "rest", scan == 2, !filtered) |>
     dplyr::distinct(sub, loc) |>
-    dplyr::filter(
-      dplyr::between(
-        loc,
-        quantile(loc, quantile_range[1]),
-        quantile(loc, quantile_range[2])
-      )
-    )
+    dplyr::filter(dplyr::between(
+      loc,
+      quantile(loc, quantile_range[1]),
+      quantile(loc, quantile_range[2])
+    ))
 
   tibble::tibble(
     src = fs::dir_ls(timeseries_src, glob = "*arrow", recurse = TRUE)
@@ -216,19 +212,13 @@ get_cor_by_thresh_hcpya_gold <- function(
 get_qcs_gold_hcpya <- function(d) {
   d |>
     dplyr::filter(window_start < 30, iter == 0) |>
-    dplyr::summarise(
-      r = mean(r),
-      .by = c(x, y, filtered, sub, cleaned)
-    )
+    dplyr::summarise(r = mean(r), .by = c(x, y, filtered, sub, cleaned))
 }
 
 get_qcs_gold <- function(d) {
   d |>
     dplyr::filter(window_start < 30, iter == 0) |>
-    dplyr::summarise(
-      r = mean(r),
-      .by = c(x, y, filtered, sub)
-    )
+    dplyr::summarise(r = mean(r), .by = c(x, y, filtered, sub))
 }
 
 
@@ -279,8 +269,7 @@ get_qc_fd <- function(src, fd, shuffle, iter = 0) {
     d <- d |>
       dplyr::mutate(framewise_displacement = sample(framewise_displacement))
   }
-  d |>
-    dplyr::mutate(iter = iter, filtered = unique(fd$filtered))
+  d |> dplyr::mutate(iter = iter, filtered = unique(fd$filtered))
 }
 
 get_qc_fd_hcpya <- function(
@@ -293,13 +282,11 @@ get_qc_fd_hcpya <- function(
   avg <- by_run |>
     dplyr::filter(dataset == "hcpya", task == "rest", scan == 2, !filtered) |>
     dplyr::distinct(sub, loc) |>
-    dplyr::filter(
-      dplyr::between(
-        loc,
-        quantile(loc, quantile_range[1]),
-        quantile(loc, quantile_range[2])
-      )
-    ) |>
+    dplyr::filter(dplyr::between(
+      loc,
+      quantile(loc, quantile_range[1]),
+      quantile(loc, quantile_range[2])
+    )) |>
     dplyr::arrange(desc(loc)) |>
     dplyr::slice_max(order_by = loc, n = n_sub)
 
@@ -336,10 +323,7 @@ bind_qc_fd <- function(...) {
 get_qc_gold <- function(qcs) {
   qcs |>
     dplyr::filter(window_start < 30, iter == 0) |>
-    dplyr::summarise(
-      r = mean(r),
-      .by = c(x, y, filtered, sub, ses)
-    )
+    dplyr::summarise(r = mean(r), .by = c(x, y, filtered, sub, ses))
 }
 
 get_ukb_subs <- function(
@@ -422,8 +406,7 @@ get_cor_by_thresh <- function(d, timeseries_src, type_id, window_width = 150) {
     dplyr::filter(sub == sub_id, type == type_id) |>
     na.omit()
   if (window_width == n_tr) {
-    dd <- d |>
-      dplyr::mutate(window_start = 0)
+    dd <- d |> dplyr::mutate(window_start = 0)
   } else {
     dd <- d |>
       tidyr::crossing(window_start = seq(0, n_tr - window_width - 1, by = 10))
@@ -433,13 +416,11 @@ get_cor_by_thresh <- function(d, timeseries_src, type_id, window_width = 150) {
       t2 = rank(framewise_displacement),
       .by = c(sub, filtered, iter, window_start)
     ) |>
-    dplyr::filter(
-      dplyr::between(
-        t2,
-        window_start,
-        window_start + window_width - 1
-      )
-    ) |>
+    dplyr::filter(dplyr::between(
+      t2,
+      window_start,
+      window_start + window_width - 1
+    )) |>
     dplyr::select(-t2) |>
     dplyr::left_join(timeseries, by = dplyr::join_by(sub, t)) |>
     dplyr::mutate(
@@ -571,11 +552,7 @@ get_cor_by_thresh2 <- function(d, timeseries_src, type_id, window_width = 150) {
     ))
 }
 
-get_cor_by_thresh_summary2 <- function(
-  d,
-  real,
-  timeseries_src
-) {
+get_cor_by_thresh_summary2 <- function(d, real, timeseries_src) {
   sub_id <- unique(d$sub)
   type_id <- unique(d$type)
 
@@ -586,8 +563,7 @@ get_cor_by_thresh_summary2 <- function(
   checkmate::assert_numeric(sub_id, len = 1)
   checkmate::assert_character(type_id, len = 1)
 
-  full <- real |>
-    dplyr::filter(sub == sub_id)
+  full <- real |> dplyr::filter(sub == sub_id)
 
   gold_f <- get_cor_by_thresh(
     d = dplyr::filter(full, filtered),

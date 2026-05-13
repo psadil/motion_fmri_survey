@@ -4,13 +4,10 @@ get_abcd <- function(sources, abcd_exclusion) {
     convert_abcd_ses() |>
     dplyr::anti_join(abcd_exclusion, dplyr::join_by(sub, ses)) |>
     dplyr::filter(t > 0) |>
-    dplyr::mutate(
-      time = t * 0.8,
-      ped = "AP",
-      scan = run
-    ) |>
+    dplyr::mutate(time = t * 0.8, ped = "AP", scan = run) |>
     dplyr::collect() |>
-    exclude_bad_abcd_scan(sources)
+    exclude_bad_abcd_scan(sources) |>
+    truncate_to_modal_lengths()
 }
 
 convert_abcd_ses <- function(.d) {
@@ -39,10 +36,7 @@ get_abcd_events <- function(abcd_design) {
     dplyr::filter(trial_type == "cue") |>
     dplyr::arrange(onset) |>
     dplyr::collect() |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(run, task, sub, ses)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(run, task, sub, ses)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -55,10 +49,7 @@ get_abcd_events <- function(abcd_design) {
     dplyr::filter(stringr::str_detect(trial_type, "back")) |>
     dplyr::arrange(onset) |>
     dplyr::collect() |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(run, task, sub, ses)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(run, task, sub, ses)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -90,10 +81,7 @@ get_abcd_events <- function(abcd_design) {
     dplyr::filter(stringr::str_detect(trial_type, "antic")) |>
     dplyr::arrange(onset) |>
     dplyr::collect() |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(run, task, sub, ses)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(run, task, sub, ses)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -106,10 +94,7 @@ get_abcd_events <- function(abcd_design) {
     dplyr::filter(stringr::str_detect(trial_type, "feedback")) |>
     dplyr::arrange(onset) |>
     dplyr::collect() |>
-    dplyr::mutate(
-      event = 1:dplyr::n(),
-      .by = c(run, task, sub, ses)
-    ) |>
+    dplyr::mutate(event = 1:dplyr::n(), .by = c(run, task, sub, ses)) |>
     dplyr::summarise(
       onset = mean(onset),
       duration = mean(duration),
@@ -160,11 +145,7 @@ get_abcd_demographics <- function(source) {
     convert_abcd_ses() |>
     dplyr::mutate(
       age = age / 12,
-      sex = dplyr::replace_values(
-        sex,
-        "F" ~ "Female",
-        "M" ~ "Male"
-      )
+      sex = dplyr::replace_values(sex, "F" ~ "Female", "M" ~ "Male")
     ) |>
     dplyr::distinct(sub, deviceserialnumber, interview_date, age, sex, ses) |>
     get_abcds_with_scanner() |>
@@ -222,9 +203,7 @@ get_abcd_demographics <- function(source) {
   ) |>
     dplyr::rename(sub = src_subject_id, ses = eventname) |>
     convert_abcd_ses() |>
-    dplyr::mutate(
-      sub = stringr::str_remove(sub, "_"),
-    ) |>
+    dplyr::mutate(sub = stringr::str_remove(sub, "_"), ) |>
     dplyr::filter(!is.na(anthroheightcalc), !is.na(anthroweightcalc)) |>
     dplyr::mutate(
       weight = anthroweightcalc * 0.4535924,
@@ -812,34 +791,6 @@ get_abcd_excl_nback <- function() {
     dplyr::mutate(task = "nback")
 }
 
-get_abcd_too_short <- function(sources) {
-  # can't go by max n_tr. Need to go by most common
-  expected <- arrow::open_dataset(sources) |>
-    dplyr::summarise(n_tr = max(t), .by = c(sub, task, ses, run)) |>
-    dplyr::count(n_tr, task) |>
-    dplyr::collect() |>
-    dplyr::filter(n >= 10) |> # can't do top alone. There appears to be 3 most common
-    dplyr::select(-n)
-
-  arrow::open_dataset(sources) |>
-    dplyr::summarise(n_tr = max(t), .by = c(sub, task, ses, run)) |>
-    dplyr::collect() |>
-    dplyr::anti_join(expected, by = dplyr::join_by(n_tr)) |>
-    dplyr::select(sub, task, ses, run) |>
-    dplyr::collect() |>
-    convert_abcd_ses() |>
-    do_casting()
-}
-
-get_abcd_too_long <- function(sources) {
-  # can't go by max n_tr. Need to go by most common
-  expected <- duckplyr::read_parquet_duckdb(sources) |>
-    dplyr::filter(t > 388, task == "rest") |>
-    dplyr::distinct(sub, ses, task, run) |>
-    convert_abcd_ses() |>
-    do_casting()
-}
-
 get_abcd_exclusion_official <- function() {
   sst <- get_abcd_excl_sst()
   nback <- get_abcd_excl_nback()
@@ -847,9 +798,7 @@ get_abcd_exclusion_official <- function() {
   rest <- get_abcd_excl_rest()
   dplyr::bind_rows(sst, nback, mid, rest) |>
     convert_abcd_ses() |>
-    dplyr::mutate(
-      sub = stringr::str_remove(sub, "_")
-    ) |>
+    dplyr::mutate(sub = stringr::str_remove(sub, "_")) |>
     do_casting()
 }
 
@@ -888,16 +837,6 @@ exclude_bad_abcd_scan <- function(d, source) {
     dplyr::collect() |>
     convert_abcd_ses() |>
     do_casting()
-  too_short <- all_runs |>
-    dplyr::semi_join(
-      get_abcd_too_short(source),
-      by = dplyr::join_by(sub, task, ses, run)
-    )
-  too_long <- all_runs |>
-    dplyr::semi_join(
-      get_abcd_too_long(source),
-      by = dplyr::join_by(sub, task, ses, run)
-    )
 
   official <- all_runs |>
     dplyr::semi_join(
@@ -911,12 +850,7 @@ exclude_bad_abcd_scan <- function(d, source) {
     )
 
   to_exclude <- dplyr::bind_rows(
-    list(
-      atypical_length = too_short,
-      official = official,
-      extra_runs = runs,
-      too_long = too_long
-    ),
+    list(official = official, extra_runs = runs),
     .id = "notes"
   ) |>
     dplyr::summarise(
@@ -924,6 +858,5 @@ exclude_bad_abcd_scan <- function(d, source) {
       .by = c(sub, ses, task, run)
     )
 
-  d |>
-    dplyr::anti_join(to_exclude, by = dplyr::join_by(sub, ses, task, run))
+  d |> dplyr::anti_join(to_exclude, by = dplyr::join_by(sub, ses, task, run))
 }

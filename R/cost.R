@@ -171,11 +171,7 @@ model <- function(k0, k1, k2, nsub, length) {
 
 get_performance <- function(src = "data/performance") {
   d <- duckplyr::read_parquet_duckdb(
-    fs::dir_ls(
-      src,
-      glob = "*parquet",
-      recurse = TRUE
-    ),
+    fs::dir_ls(src, glob = "*parquet", recurse = TRUE),
     prudence = "lavish"
   ) |>
     dplyr::summarise(
