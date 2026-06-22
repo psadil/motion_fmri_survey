@@ -108,8 +108,11 @@ get_hcpya_spectrum <- function(src, hcpya) {
     )
 }
 
-get_abcd_spectrum <- function(src, abcd) {
-  to_keep <- dplyr::distinct(abcd, sub, task, run, ped, ses, scan)
+get_abcd_spectrum <- function(src, by_run) {
+  to_keep <- by_run |>
+    dplyr::filter(dataset == "abcd") |>
+    dplyr::distinct(sub, task, ses, scan) |>
+    dplyr::mutate(scan = as.integer(scan))
 
   unique_ses_src <- duckplyr::read_parquet_duckdb(src) |>
     dplyr::distinct(ses, run) |>
@@ -122,8 +125,10 @@ get_abcd_spectrum <- function(src, abcd) {
         run == unique_ses_src$run[[i]]
       ) |>
       convert_abcd_ses() |>
+      dplyr::rename(scan = run) |>
       do_casting() |>
-      dplyr::inner_join(to_keep, by = dplyr::join_by(sub, ses, task, run))
+      dplyr::collect() |>
+      dplyr::inner_join(to_keep, by = dplyr::join_by(sub, ses, task, scan))
   }
   dplyr::bind_rows(out)
 }
@@ -156,4 +161,78 @@ get_ukb_spectrum <- function(src, ukb) {
       dplyr::distinct(ukb, sub, task, run, ped, ses, scan),
       by = dplyr::join_by(sub, ses, task, ped, run, scan)
     )
+}
+
+get_limits <- function(
+  d,
+  lower_exclude = 0.15,
+  upper_exclude = 0.6,
+  trans_dir = "trans_y"
+) {
+  d |>
+    dplyr::filter(
+      dplyr::between(freq, lower_exclude, upper_exclude),
+      param == trans_dir
+    ) |>
+    dplyr::slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, scan)) |>
+    dplyr::summarise(
+      lower = median(freq),
+      upper = quantile(freq, 0.75),
+      .by = c(task)
+    ) |>
+    dplyr::summarise(lower = mean(lower), upper = mean(upper))
+}
+
+prep_tbl_freq_limits <- function(
+  hcpa_spectrum,
+  hcpd_spectrum,
+  hcpya_spectrum,
+  spacetop_spectrum,
+  ukb_spectrum,
+  abcd_spectrum,
+  demographics
+) {
+  hcpd_young <- hcpd_spectrum |>
+    dplyr::left_join(
+      demographics |>
+        dplyr::filter(dataset == "hcpd") |>
+        dplyr::distinct(sub, ses, age)
+    ) |>
+    dplyr::filter(age < 8) |>
+    get_limits() |>
+    dplyr::mutate(dataset = "hcpd", ses = "6-7")
+
+  hcpd_old <- hcpd_spectrum |>
+    dplyr::left_join(
+      demographics |>
+        dplyr::filter(dataset == "hcpd") |>
+        dplyr::distinct(sub, ses, age)
+    ) |>
+    dplyr::filter(age >= 8) |>
+    get_limits() |>
+    dplyr::mutate(dataset = "hcpd", ses = "8+")
+
+  abcd <- purrr::map(
+    list(
+      Year2 = dplyr::filter(abcd_spectrum, ses == "Year2"),
+      Year4 = dplyr::filter(abcd_spectrum, ses == "Year4"),
+      Baseline = dplyr::filter(abcd_spectrum, ses == "Baseline")
+    ),
+    get_limits
+  ) |>
+    dplyr::bind_rows(.id = "ses") |>
+    dplyr::mutate(dataset = "abcd")
+
+  purrr::map2(
+    list(
+      hcpya = hcpya_spectrum,
+      hcpa = hcpa_spectrum,
+      spacetop = spacetop_spectrum,
+      ukb = ukb_spectrum
+    ),
+    c("trans_x", "trans_y", "trans_y", "trans_y"),
+    ~ get_limits(.x, trans_dir = .y)
+  ) |>
+    dplyr::bind_rows(.id = "dataset") |>
+    dplyr::bind_rows(hcpd_young, hcpd_old, abcd)
 }

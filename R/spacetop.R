@@ -1,10 +1,7 @@
 get_spacetop_demographics <- function(src) {
   readr::read_tsv(src, col_select = c(-group), show_col_types = FALSE) |>
     dplyr::rename(sub = participant_id) |>
-    dplyr::mutate(
-      sex = dplyr::replace_values(sex, "M" ~ "Male", "F" ~ "Female"),
-      sub = stringr::str_extract(sub, "(?<=sub-)[[:digit:]]+")
-    ) |>
+    dplyr::mutate(sub = stringr::str_extract(sub, "(?<=sub-)[[:digit:]]+")) |>
     do_casting()
 }
 

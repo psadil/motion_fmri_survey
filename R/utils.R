@@ -4,7 +4,16 @@ deg_2_rad <- function(rad) {
 
 get_demographics <- function(datasets, by_run) {
   dplyr::bind_rows(datasets, .id = "dataset") |>
-    dplyr::select(dataset, sub, sex, age, ses, bmi) |>
+    dplyr::select(
+      dataset,
+      sub,
+      sex,
+      age,
+      ses,
+      bmi,
+      deviceserialnumber,
+      manufacturer
+    ) |>
     dplyr::mutate(dataset = factor(dataset), sex = factor(sex)) |>
     dplyr::mutate(ses = dplyr::if_else(is.na(ses), "1", ses)) |>
     dplyr::distinct() |> # ABCD has some duplicates
@@ -425,4 +434,257 @@ truncate_to_modal_lengths <- function(d) {
     dplyr::left_join(expected, by = dplyr::join_by(task, ses, scan)) |>
     dplyr::filter(t <= n_tr) |>
     dplyr::select(-n_tr)
+}
+
+
+plot_demo_tbl <- function(by_run, demographics, ds) {
+  by_run |>
+    dplyr::filter(dataset == ds) |>
+    dplyr::distinct(sub, ses, dataset) |>
+    dplyr::left_join(demographics) |>
+    dplyr::select(sub, ses, Age = age, BMI = bmi, Sex = sex) |>
+    dplyr::mutate(ses = forcats::fct_drop(ses), Sex = forcats::fct_drop(Sex)) |>
+    gtsummary::tbl_summary(by = ses, include = c(-sub)) |>
+    gtsummary::modify_header(label ~ glue::glue("**{ds}**"))
+}
+
+read_distinct_collect <- function(source) {
+  duckplyr::read_parquet_duckdb(source) |>
+    dplyr::distinct(sub) |>
+    dplyr::collect()
+}
+
+get_orig_counts <- function(
+  ukb_source,
+  spacetop_source,
+  hcpya_source,
+  hcpa_source,
+  hcpd_source,
+  abcd_source
+) {
+  purrr::map(
+    list(
+      ukb = ukb_source,
+      spacetop = spacetop_source,
+      abcd = abcd_source,
+      hcpya = hcpya_source,
+      hcpa = hcpa_source,
+      hcpd = hcpd_source
+    ),
+    read_distinct_collect
+  ) |>
+    dplyr::bind_rows(.id = "dataset") |>
+    dplyr::count(dataset)
+}
+
+plot_spectrum <- function(spectrums, ds) {
+  d <- spectrums |>
+    dplyr::filter(dataset == ds) |>
+    dplyr::mutate(avg = factor(avg, ordered = TRUE))
+
+  if (ds %in% c("hcpd", "hcpa")) {
+    d |>
+      ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
+      ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
+      ggplot2::scale_fill_viridis_c(option = "turbo") +
+      ggplot2::facet_grid(task + scan ~ param) +
+      ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+      ggplot2::theme(
+        axis.ticks.y = ggplot2::element_blank(),
+        axis.text.y = ggplot2::element_blank()
+      )
+  } else if (ds %in% c("hcpya")) {
+    d |>
+      dplyr::filter(scan == 1) |>
+      ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
+      ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
+      ggplot2::scale_fill_viridis_c(option = "turbo") +
+      ggplot2::facet_grid(task + scan ~ param) +
+      ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+      ggplot2::theme(
+        axis.ticks.y = ggplot2::element_blank(),
+        axis.text.y = ggplot2::element_blank()
+      )
+  } else if (ds %in% c("spacetop")) {
+    d |>
+      dplyr::filter(scan == 1) |>
+      ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
+      ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
+      ggplot2::scale_fill_viridis_c(option = "turbo") +
+      ggplot2::facet_grid(task + ses ~ param, ) +
+      ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+      ggplot2::theme(
+        axis.ticks.y = ggplot2::element_blank(),
+        axis.text.y = ggplot2::element_blank()
+      )
+  }
+}
+
+get_icc <- function(by_run) {
+  ukb_abcd <- by_run |>
+    dplyr::select(-sem) |>
+    dplyr::filter(
+      stringr::str_detect(task, "rest"),
+      scan == 1,
+      dataset %in% c("ukb", "abcd")
+    ) |>
+    dplyr::group_nest(dataset, filtered) |>
+    dplyr::mutate(
+      fit = purrr::map(
+        data,
+        ~ .x |>
+          tidyr::pivot_wider(names_from = ses, values_from = loc) |>
+          dplyr::select(-task, -scan, -sub) |>
+          as.matrix() |>
+          psych::ICC() |>
+          purrr::pluck("results") |>
+          tibble::as_tibble()
+      )
+    ) |>
+    dplyr::select(-data) |>
+    tidyr::unnest(fit)
+
+  dd <- by_run |>
+    dplyr::select(-sem) |>
+    dplyr::filter(!(dataset %in% c("ukb", "spacetop"))) |>
+    dplyr::filter(task == "rest") |>
+    dplyr::group_nest(dataset, filtered, ses) |>
+    dplyr::mutate(
+      fit = purrr::map(
+        data,
+        ~ .x |>
+          tidyr::pivot_wider(names_from = scan, values_from = loc) |>
+          na.omit() |>
+          dplyr::select(`1`:`4`) |>
+          as.matrix() |>
+          psych::ICC() |>
+          purrr::pluck("results") |>
+          tibble::as_tibble()
+      )
+    ) |>
+    dplyr::select(-data) |>
+    tidyr::unnest(fit) |>
+    dplyr::bind_rows(ukb_abcd) |>
+    dplyr::filter(type == "ICC1", !filtered) |>
+    dplyr::rename(lower = `lower bound`, upper = `upper bound`)
+}
+
+
+format_icc <- function(row) {
+  glue::glue(
+    "$_{[round(row$lower, 2)]}{[round(row$ICC, 2)]}_{[round(row$upper, 2)]}$ ($F([row$df1],[row$df2]) = [round(row$F, 2)], p < 0.001$)",
+    .open = "[",
+    .close = "]"
+  ) |>
+    knitr::asis_output()
+}
+
+
+get_compare_datasets_fit <- function(by_run, demographics, bpm_src) {
+  bpm <- readr::read_csv(bpm_src) |>
+    dplyr::select(
+      sub = src_subject_id,
+      ses = eventname,
+      bpm_t_scr_external_t,
+      bpm_t_scr_internal_t,
+      bpm_t_scr_attention_t
+    ) |>
+    dplyr::filter(
+      !(ses %in% c("1_year_follow_up_y_arm_1", "3_year_follow_up_y_arm_1"))
+    ) |>
+    dplyr::mutate(sub = stringr::str_remove(sub, "_")) |>
+    convert_abcd_ses() |>
+    tidyr::pivot_longer(bpm_t_scr_external_t:bpm_t_scr_attention_t) |>
+    na.omit() |>
+    dplyr::summarise(value = mean(value), .by = c(sub, name)) |>
+    tidyr::pivot_wider()
+
+  d <- by_run |>
+    dplyr::filter(
+      dataset %in% c("hcpd", "abcd"),
+      !filtered,
+      stringr::str_detect(task, "rest")
+    ) |>
+    dplyr::left_join(dplyr::distinct(
+      demographics,
+      dataset,
+      sub,
+      age,
+      ses,
+      bmi,
+      sex,
+      deviceserialnumber,
+      manufacturer
+    )) |>
+    dplyr::left_join(bpm) |>
+    dplyr::mutate(dplyr::across(
+      tidyselect::contains("bpm_t_scr"),
+      ~ dplyr::if_else(is.na(.x), 0, .x)
+    )) |>
+    dplyr::mutate(
+      external = bpm_t_scr_external_t > 65,
+      internal = bpm_t_scr_internal_t > 65,
+      attention = bpm_t_scr_attention_t > 65,
+      deviceserialnumber = dplyr::if_else(
+        is.na(deviceserialnumber),
+        "hcpd",
+        deviceserialnumber
+      ),
+      manufacturer = dplyr::if_else(
+        is.na(manufacturer),
+        "SIEMENS_HCD",
+        manufacturer
+      ),
+      ses = factor(ses, ordered = FALSE)
+    )
+
+  lme4::lmer(
+    loc ~ external +
+      internal +
+      attention +
+      age * bmi * sex +
+      manufacturer +
+      manufacturer:age +
+      (1 | sub),
+    data = d
+  )
+}
+
+format_tidy_contrast <- function(row) {
+  if (row$p.value < 0.001) {
+    p <- "p < 0.001"
+  } else if (row$p.value < 0.01) {
+    p <- "p < 0.01"
+  } else if (row$p.value < 0.05) {
+    p <- "p < 0.05"
+  } else {
+    p <- "p > 0.05"
+  }
+  str <- glue::glue(
+    "$_{[round(row$conf.low, 2)]}{[round(row$estimate, 2)]}_{[round(row$conf.high, 2)]}$, $[p]$",
+    .open = "[",
+    .close = "]"
+  )
+  glue::glue("`[str]`{=latex}", .open = "[", .close = "]")
+}
+
+
+get_rest_fit <- function(by_run, demographics) {
+  d <- by_run |>
+    dplyr::filter(!filtered, stringr::str_detect(task, "rest")) |>
+    dplyr::left_join(dplyr::distinct(
+      demographics,
+      dataset,
+      sub,
+      age,
+      ses,
+      bmi,
+      sex,
+    )) |>
+    dplyr::mutate(ses = factor(ses, ordered = FALSE))
+
+  glmmTMB::glmmTMB(
+    loc ~ age * bmi * sex + dataset + dataset:age + (1 | sub),
+    data = d
+  )
 }

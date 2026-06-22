@@ -422,7 +422,15 @@ get_hcpya_exclusion_by_other <- function(src) {
 }
 
 get_hcp_ls_exclusion_by_other <- function(src) {
-  # downloaded from https://wiki.humanconnectome.org/docs/HCP%20Lifespan%20Subjects%20with%20Identified%20Quality%20Control%20Issues%20(QC_Issue_Codes%20explained).html
+  # missing BMI
+  if (stringr::str_detect(src, "HCD")) {
+    extra <- tibble::tibble(sub = "2761967")
+  } else {
+    extra <- tibble::tibble(sub = c("9323978", "9599212"))
+  }
+
+  #' downloaded from
+  #' https://wiki.humanconnectome.org/docs/HCP%20Lifespan%20Subjects%20with%20Identified%20Quality%20Control%20Issues%20(QC_Issue_Codes%20explained).html
   readxl::read_xlsx(src, col_names = c("sub", "read", "released")) |>
     dplyr::filter(is.na(released)) |>
     dplyr::mutate(
@@ -432,7 +440,8 @@ get_hcp_ls_exclusion_by_other <- function(src) {
         as.character()
     ) |>
     dplyr::select(sub) |>
-    na.omit()
+    na.omit() |>
+    dplyr::bind_rows(extra)
 }
 
 

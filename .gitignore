@@ -11,7 +11,7 @@ data/events/*tsv
 !data/ukb-schaefer/*py
 !data/ukb-schaefer/run*
 /.quarto/
-index*
+index_*
 Untitled*
 *nii
 *gz
@@ -27,3 +27,5 @@ figures
 !.pixi/config.toml
 
 **/.DS_Store
+
+**/*.quarto_ipynb

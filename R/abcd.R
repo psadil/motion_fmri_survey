@@ -109,31 +109,23 @@ get_abcd_events <- function(abcd_design) {
 }
 
 
-get_abcds_with_scanner <- function(.data) {
-  with_na <- .data |>
-    dplyr::group_nest(sub, ses) |>
-    dplyr::mutate(
-      anyna = purrr::map_lgl(
-        data,
-        ~ any(is.na(.x$deviceserialnumber)) &&
-          !all(is.na(.x$deviceserialnumber))
-      )
-    ) |>
-    dplyr::filter(anyna) |>
-    tidyr::unnest(data) |>
-    na.omit() |>
-    dplyr::select(-anyna)
-
-  .data |>
-    dplyr::anti_join(with_na) |> # de-duplicate
-    dplyr::bind_rows(with_na) # add the correct entries back
-}
-
-
 get_abcd_demographics <- function(source) {
   abcd_subs <- arrow::open_dataset(source) |>
     dplyr::distinct(sub, ses) |>
     dplyr::collect()
+
+  serial <- readr::read_csv(
+    "data/tabular/core/imaging/mri_y_adm_info.csv",
+    show_col_types = FALSE
+  ) |>
+    dplyr::select(
+      sub = src_subject_id,
+      ses = eventname,
+      deviceserialnumber = mri_info_deviceserialnumber,
+      manufacturer = mri_info_manufacturer
+    ) |>
+    dplyr::mutate(sub = stringr::str_remove(sub, "_")) |>
+    convert_abcd_ses()
 
   main <- read_nda("data/demographics/image03.txt") |>
     dplyr::rename(ses = visit, age = interview_age) |>
@@ -147,8 +139,7 @@ get_abcd_demographics <- function(source) {
       age = age / 12,
       sex = dplyr::replace_values(sex, "F" ~ "Female", "M" ~ "Male")
     ) |>
-    dplyr::distinct(sub, deviceserialnumber, interview_date, age, sex, ses) |>
-    get_abcds_with_scanner() |>
+    dplyr::distinct(sub, interview_date, age, sex, ses) |>
     dplyr::slice_min(order_by = interview_date, n = 1, by = c(sub, ses)) |>
     dplyr::slice_min(order_by = age, n = 1, by = c(sub, ses)) |> # errors in dataset
     dplyr::select(-interview_date)
@@ -219,9 +210,10 @@ get_abcd_demographics <- function(source) {
     dplyr::filter(ses %in% c("Baseline", "Year2", "Year4")) |>
     dplyr::mutate(
       age = dplyr::if_else(is.na(age.y), age.x, age.y),
-      sex = dplyr::if_else(is.na(sex.y), sex.x, sex.y),
+      sex = dplyr::if_else(is.na(sex.y), sex.x, sex.y)
     ) |>
-    dplyr::select(sub, ses, age, sex, deviceserialnumber, bmi)
+    dplyr::left_join(serial, by = dplyr::join_by(sub, ses)) |>
+    dplyr::select(sub, ses, age, sex, deviceserialnumber, bmi, manufacturer)
 }
 
 

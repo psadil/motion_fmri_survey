@@ -17,8 +17,8 @@ source("R/cost.R")
 
 targets::tar_option_set(
   trust_timestamps = TRUE,
-  format = "parquet",
-  controller = crew::crew_controller_local(workers = 12)
+  format = "parquet"
+  # controller = crew::crew_controller_local(workers = 12)
 )
 
 
@@ -169,8 +169,7 @@ list(
         abcd = abcd_demographics
       ),
       by_run = by_run
-    ),
-    format = "parquet"
+    )
   ),
   tar_target(
     demographics_tsv,
@@ -216,7 +215,7 @@ list(
   ),
   tar_target(
     abcd_spectrum,
-    get_abcd_spectrum(src = abcd_spectrum_src, abcd = abcd)
+    get_abcd_spectrum(src = abcd_spectrum_src, by_run = by_run)
   ),
   tar_target(
     spacetop_spectrum_src,
@@ -252,26 +251,16 @@ list(
   ),
   tar_target(mriqc_src, "data/bold", format = "file"),
   tar_target(
-    age_chart,
-    write_png(
-      make_fig_demographics(by_run, demographics, mriqc_src),
-      "figures/age-chart.png",
-      width = 6.5,
-      height = 5
-    ),
-    packages = c("patchwork", "ggplot2"),
-    format = "file"
+    fig_age_chart,
+    make_fig_demographics(by_run, demographics, mriqc_src),
+    packages = c("patchwork"),
+    format = "qs"
   ),
   tar_target(
-    fig_by_time_hcpya_file,
-    write_png(
-      make_fig_by_time_hcpya(by_time, hcpya_events = hcpya_events),
-      "figures/by-time-hcpya.png",
-      width = 9.5,
-      height = 6
-    ),
+    fig_by_time_hcpya,
+    make_fig_by_time_hcpya(by_time, hcpya_events = hcpya_events),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     hcpd_event_times,
@@ -280,18 +269,13 @@ list(
   ),
   tar_target(
     fig_by_time_hcpd,
-    write_png(
-      make_fig_by_time_hcpd(
-        hcpd = hcpd,
-        hcpd_event_times = hcpd_event_times,
-        by_time = by_time
-      ),
-      "figures/by-time-hcpd.png",
-      width = 6,
-      height = 5
+    make_fig_by_time_hcpd(
+      hcpd = hcpd,
+      hcpd_event_times = hcpd_event_times,
+      by_time = by_time
     ),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     hcpa_event_times,
@@ -300,33 +284,23 @@ list(
   ),
   tar_target(
     fig_by_time_hcpa,
-    write_png(
-      make_fig_by_time_hcpa(
-        hcpa = hcpa,
-        hcpa_event_times = hcpa_event_times,
-        by_time = by_time
-      ),
-      "figures/by-time-hcpa.png",
-      width = 6,
-      height = 5
+    make_fig_by_time_hcpa(
+      hcpa = hcpa,
+      hcpa_event_times = hcpa_event_times,
+      by_time = by_time
     ),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     fig_by_time_ukb,
-    write_png(
-      make_fig_by_time_ukb(
-        ukb_events = ukb_events,
-        ukb_responses = ukb_responses,
-        by_time = by_time
-      ),
-      "figures/by-time-ukb.png",
-      width = 5,
-      height = 2
+    make_fig_by_time_ukb(
+      ukb_events = ukb_events,
+      ukb_responses = ukb_responses,
+      by_time = by_time
     ),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     abcd_events2,
@@ -335,80 +309,46 @@ list(
   ),
   tar_target(
     fig_by_time_abcd,
-    write_png(
-      make_fig_by_time_abcd(abcd_events = abcd_events2, by_time = by_time),
-      "figures/by-time-abcd.png",
-      width = 5,
-      height = 4
-    ),
+    make_fig_by_time_abcd(abcd_events = abcd_events2, by_time = by_time),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     fig_by_time_spacetop,
-    write_png(
-      make_fig_by_time_spacetop(by_time = by_time),
-      "figures/by-time-spacetop.png",
-      width = 5,
-      height = 3
-    ),
+    make_fig_by_time_spacetop(by_time = by_time),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     fig_by_run,
-    write_png(
-      make_fig_by_run(by_run = by_run, demographics = demographics),
-      "figures/by-run.png",
-      width = 6.5,
-      height = 7.7
-    ),
+    make_fig_by_run(by_run = by_run, demographics = demographics),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     fig_all_motion_exclusion,
-    write_png(
-      make_fig_all_motion_exclusion(lost = lost),
-      "figures/all_motion_exclusion.png",
-      width = 6.5,
-      height = 6.5
-    ),
+    make_fig_all_motion_exclusion(lost = lost),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     fig_all_motion_exclusion2,
-    write_png(
-      make_fig_all_motion_exclusion(lost = lost, filtered = TRUE),
-      "figures/all_motion_exclusion_filtered.png",
-      width = 6.5,
-      height = 6.5
-    ),
+    make_fig_all_motion_exclusion(lost = lost, filtered = TRUE),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
+  tar_target(group_highlow, make_group_highlow(by_run)),
   tar_target(
-    fig_cluster,
-    write_png(
-      make_fig_cluster(by_run),
-      "figures/cluster.png",
-      width = 6,
-      height = 5
-    ),
+    fig_groups,
+    make_fig_cluster(by_run, group_highlow),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     fig_lost_by_group,
-    write_png(
-      make_fig_lost_by_group(by_run, demographics),
-      "figures/lost_by_group.png",
-      width = 6,
-      height = 5
-    ),
+    make_fig_lost_by_group(by_run, demographics),
     packages = c("patchwork"),
-    format = "file"
+    format = "qs"
   ),
   tar_target(
     lost_strict2,
@@ -429,13 +369,8 @@ list(
   ),
   tar_target(
     fig_cost,
-    write_png(
-      make_fig_cost(cost_plot, cost_lost_plot, acc_decrease_plot),
-      "figures/cost.png",
-      width = 6,
-      height = 3
-    ),
-    format = "file",
+    make_fig_cost(cost_plot, cost_lost_plot, acc_decrease_plot),
+    format = "qs",
     packages = "patchwork"
   ),
   tar_target(key_measures, get_key_measures(), format = "qs"),
@@ -443,25 +378,12 @@ list(
   tar_target(performance, get_performance(performance_src)),
   tar_target(
     fig_performance,
-    write_png(
-      make_fig_performance(performance, key_measures),
-      "figures/performance.png",
-      width = 6,
-      height = 5.5
-    ),
+    make_fig_performance(performance, key_measures),
     packages = "patchwork",
-    format = "file"
+    format = "qs"
   ),
-  tar_target(
-    fig_power,
-    write_png(
-      make_fig_power(by_run, lost),
-      "figures/power.png",
-      width = 6,
-      height = 3
-    ),
-    format = "file"
-  ),
+  tar_target(fig_power, make_fig_power(by_run, lost), format = "qs"),
+  tar_target(fig_hcp_psych, make_fig_hcp_psych(by_run), format = "qs"),
   tar_target(timeseries_src, "data/timeseries", format = "file"),
   tar_target(
     ukb_subs,
@@ -481,24 +403,6 @@ list(
     pattern = cross(qc_fd_ukb_real, iter)
   ),
   tar_target(type_id, c("clean", "raw", "rawraw"), format = "qs"), # for ukb timeseries
-  # tar_target(
-  #   qc_ukb,
-  #   get_cor_by_thresh(
-  #     d = qc_fd_ukb,
-  #     timeseries_src = timeseries_src,
-  #     type_id = type_id
-  #   ),
-  #   pattern = cross(qc_fd_ukb, type_id)
-  # ),
-  # tar_target(
-  #   qc_ukb_summary,
-  #   get_cor_by_thresh_summary(
-  #     qc_ukb,
-  #     real = qc_fd_ukb_real,
-  #     timeseries_src = timeseries_src
-  #   ),
-  #   pattern = map(qc_ukb)
-  # ),
   tarchetypes::tar_group_by(
     qc_fd_ukb,
     tidyr::crossing(qc_fd_ukb0, threshold = seq(0.01, .2, by = 0.02)),
@@ -529,27 +433,46 @@ list(
         .by = c(threshold, type, filtered)
       ),
   ),
+  tar_target(fig_mac, make_fig_mac(mac), format = "qs"),
   tar_target(
-    fig_mac,
-    write_png(make_fig_mac(mac), "figures/mac.png", width = 6, height = 3),
+    orig_counts,
+    get_orig_counts(
+      ukb_source = ukb_source,
+      spacetop_source = spacetop_source,
+      abcd_source = abcd_source,
+      hcpya_source = hcpya_source,
+      hcpa_source = hcpa_source,
+      hcpd_source = hcpd_source
+    )
+  ),
+  tar_target(
+    freq_limits,
+    prep_tbl_freq_limits(
+      hcpa_spectrum = hcpa_spectrum,
+      hcpd_spectrum = hcpd_spectrum,
+      hcpya_spectrum = hcpya_spectrum,
+      spacetop_spectrum = spacetop_spectrum,
+      ukb_spectrum = ukb_spectrum,
+      abcd_spectrum = abcd_spectrum,
+      demographics = demographics
+    )
+  ),
+  tar_target(
+    fig_hcpa_spectrum,
+    plot_spectrum(spectrums, "hcpa"),
+    format = "qs"
+  ),
+  tar_target(icc, get_icc(by_run)),
+  tar_target(
+    bpm_src,
+    "data/tabular/core/mental-health/mh_t_bpm.csv",
     format = "file"
-  )
-  # tar_target(
-  #   qc_ukb2,
-  #   get_cor_by_thresh2(
-  #     d = dplyr::select(qc_fd_ukb2, -tar_group),
-  #     timeseries_src = timeseries_src,
-  #     type_id = type_id
-  #   ),
-  #   pattern = cross(map(qc_fd_ukb2), type_id)
-  # ),
-  # tar_target(
-  #   qc_ukb_summary2,
-  #   get_cor_by_thresh_summary2(
-  #     qc_ukb2,
-  #     real = qc_fd_ukb_real,
-  #     timeseries_src = timeseries_src
-  #   ),
-  #   pattern = map(qc_ukb2)
-  # )
+  ),
+  tar_target(
+    compare_datasets_fit,
+    get_compare_datasets_fit(by_run, demographics, bpm_src),
+    format = "qs"
+  ),
+  tar_target(rest_fit, get_rest_fit(by_run, demographics), format = "qs"),
+  tarchetypes::tar_quarto(report, quiet = FALSE)
 )

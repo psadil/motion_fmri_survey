@@ -812,7 +812,7 @@ make_fig_all_motion_exclusion <- function(
     ggplot2::theme(legend.position = "bottom")
 }
 
-make_fig_cluster <- function(by_run, base_size = 10) {
+make_group_highlow <- function(by_run) {
   rest1_abcd <- by_run |>
     dplyr::filter(
       dataset == "abcd",
@@ -829,17 +829,24 @@ make_fig_cluster <- function(by_run, base_size = 10) {
     dplyr::mutate(split = loc > median(loc)) |>
     dplyr::select(sub, split)
 
+  dplyr::bind_rows(
+    list(abcd = rest1_abcd, hcpya = rest1_hcpya),
+    .id = "dataset"
+  ) |>
+    dplyr::mutate(
+      split = dplyr::if_else(split, "High Movers", "Low Movers") |>
+        factor(levels = c("Low Movers", "High Movers"), ordered = TRUE)
+    )
+}
+
+make_fig_cluster <- function(by_run, group_highlow, base_size = 10) {
   a <- by_run |>
     dplyr::filter(dataset == "hcpya", !filtered) |>
-    dplyr::inner_join(rest1_hcpya) |>
+    dplyr::inner_join(group_highlow) |>
     dplyr::summarize(
       avg = mean(loc),
       sem = sd(loc) / sqrt(dplyr::n()),
       .by = c(task, split, scan)
-    ) |>
-    dplyr::mutate(
-      split = dplyr::if_else(split, "High Movers", "Low Movers") |>
-        factor(levels = c("Low Movers", "High Movers"), ordered = TRUE)
     ) |>
     ggplot2::ggplot(ggplot2::aes(x = scan, y = avg, group = split)) +
     ggplot2::facet_wrap(~task, scales = "free_x", nrow = 1) +
@@ -856,15 +863,11 @@ make_fig_cluster <- function(by_run, base_size = 10) {
 
   b <- by_run |>
     dplyr::filter(dataset == "abcd", !filtered) |>
-    dplyr::inner_join(rest1_abcd) |>
+    dplyr::inner_join(group_highlow) |>
     dplyr::summarize(
       avg = mean(loc),
       sem = sd(loc) / sqrt(dplyr::n()),
       .by = c(task, split, scan, ses)
-    ) |>
-    dplyr::mutate(
-      split = dplyr::if_else(split, "High Movers", "Low Movers") |>
-        factor(levels = c("Low Movers", "High Movers"), ordered = TRUE)
     ) |>
     ggplot2::ggplot(ggplot2::aes(x = scan, y = avg, group = split)) +
     ggplot2::facet_grid(ses ~ task, scales = "free_x") +
@@ -1117,4 +1120,61 @@ make_fig_power <- function(by_run, lost) {
       legend.position = "inside",
       legend.position.inside = c(0.9, 0.1)
     )
+}
+
+make_fig_hcp_psych <- function(by_run) {
+  splits <- by_run |>
+    dplyr::filter(
+      task == "rest",
+      !filtered,
+      scan == 1,
+      dataset %in% c("abcd", "hcpya"),
+      ses %in% c("Baseline", 1)
+    ) |>
+    dplyr::mutate(
+      group = dplyr::if_else(loc > median(loc), "high", "low"),
+      .by = c(dataset)
+    ) |>
+    dplyr::select(dataset, sub, group, loc)
+
+  toshow2 <- readr::read_csv(
+    "data/human-connectome-project-restricted/RESTRICTED_martin_2_5_2024_10_18_28.csv"
+  ) |>
+    dplyr::select(
+      sub = Subject,
+      tidyselect::starts_with("ASR_"),
+      tidyselect::starts_with("DSM_")
+    ) |>
+    dplyr::select(
+      !tidyselect::ends_with("Pct") & !tidyselect::ends_with("Sum")
+    ) |>
+    dplyr::mutate(sub = as.character(sub)) |>
+    dplyr::rename_with(
+      ~ .x |>
+        stringr::str_remove("ASR_") |>
+        stringr::str_remove("DSM_") |>
+        stringr::str_remove("_T")
+    ) |>
+    dplyr::inner_join(splits) |>
+    dplyr::select(-dataset)
+
+  toshow2 |>
+    dplyr::select(-tidyselect::ends_with("Raw")) |>
+    tidyr::pivot_longer(c(-sub, -group, -loc)) |>
+    dplyr::group_nest(name) |>
+    dplyr::mutate(
+      data = purrr::map(
+        data,
+        ~ lm(value ~ loc, .x) |> broom::tidy(conf.int = TRUE)
+      )
+    ) |>
+    tidyr::unnest(data) |>
+    dplyr::filter(stringr::str_detect(term, "Inter", TRUE)) |>
+    dplyr::arrange(estimate) |>
+    dplyr::mutate(name = factor(name, levels = .data$name)) |>
+    ggplot2::ggplot(ggplot2::aes(y = name)) +
+    ggplot2::geom_point(ggplot2::aes(x = estimate)) +
+    ggplot2::geom_segment(ggplot2::aes(x = conf.low, xend = conf.high)) +
+    ggplot2::ylab("Psychiatric and Life Function Variable") +
+    ggplot2::xlab("Estimate")
 }

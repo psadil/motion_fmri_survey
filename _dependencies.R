@@ -1,3 +1,5 @@
 library(qs2)
 library(BiocManager)
 library(BiocVersion)
+library(quarto)
+library(tikzDevice)

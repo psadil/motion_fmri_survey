@@ -14,8 +14,7 @@ library(dplyr)
 library(ggplot2)
 
 .clean <- function(.data, N = 20) {
-  .data |>
-    semi_join(count(.data, freq) |> filter(n > N))
+  .data |> semi_join(count(.data, freq) |> filter(n > N))
 }
 ```
 
@@ -30,10 +29,7 @@ targets::tar_read(hcpa_spectrum) |>
   scale_fill_viridis_c(option = "turbo") +
   facet_grid(task + ped ~ param) +
   ylab("(<- lower avg fd) participant (higher avg fd ->)") +
-  theme(
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank()
-  ) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
   ggtitle("HCPA")
 ```
 
@@ -47,10 +43,7 @@ targets::tar_read(hcpa_spectrum) |>
   scale_fill_viridis_c(option = "turbo") +
   facet_grid(task + ped ~ param) +
   ylab("(<- lower avg fd) participant (higher avg fd ->)") +
-  theme(
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank()
-  ) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
   ggtitle("HCPD")
 ```
 
@@ -72,10 +65,7 @@ targets::tar_read(hcpya_spectrum) |>
   scale_fill_viridis_c(option = "turbo") +
   facet_grid(task ~ param) +
   ylab("(<- lower avg fd) participant (higher avg fd ->)") +
-  theme(
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank()
-  ) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
   ggtitle("HCPYA (LR)")
 ```
 
@@ -111,10 +101,7 @@ targets::tar_read(abcd_spectrum) |>
   scale_fill_viridis_c(option = "turbo") +
   facet_grid(ses ~ task + run + param, scales = "free_y") +
   ylab("(<- lower avg fd) participant (higher avg fd ->)") +
-  theme(
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank()
-  ) +
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank()) +
   ggtitle("ABCD")
 ```
 
@@ -144,10 +131,7 @@ ukb |>
   geom_raster(aes(fill = pxx)) +
   scale_fill_viridis_c(option = "turbo") +
   facet_wrap(~task, scales = "free_y") +
-  theme(
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank()
-  )
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank())
 ```
 
 
@@ -174,111 +158,5 @@ spacetop |>
   geom_raster(aes(fill = pxx)) +
   scale_fill_viridis_c(option = "turbo") +
   facet_grid(task ~ ses + run, scales = "free_y") +
-  theme(
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank()
-  )
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank())
 ```
-
-## Notch Filter Parameters
-
-```{r, peaks}
-#| eval: false
-hcpa <- arrow::read_parquet(
-  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/hcpa_spectrum.parquet"
-) |>
-  filter(between(freq, 0.2, 0.6), param == "trans_y") |>
-  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, ped)) |>
-  summarise(
-    freq = median(freq),
-    .by = c(sub, task, param)
-  ) |>
-  summarise(
-    lower = median(freq),
-    upper = quantile(freq, 0.75),
-    .by = c(task)
-  )
-hcpd <- arrow::read_parquet(
-  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/hcpd_spectrum.parquet"
-) |>
-  filter(between(freq, 0.2, 0.6), param == "trans_y") |>
-  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, ped)) |>
-  summarise(
-    freq = median(freq),
-    .by = c(sub, task)
-  ) |>
-  summarise(
-    lower = median(freq),
-    upper = quantile(freq, 0.75),
-    .by = c(task)
-  )
-hcpya <- arrow::read_parquet(
-  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/hcpya_spectrum.parquet"
-) |>
-  filter(between(freq, 0.2, 0.6), param == "trans_x") |>
-  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, ped)) |>
-  summarise(
-    freq = median(freq),
-    .by = c(sub, task)
-  ) |>
-  summarise(
-    lower = median(freq),
-    upper = quantile(freq, 0.75),
-    .by = c(task)
-  )
-
-abcd <- arrow::read_parquet(
-  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/abcd_spectrum.parquet"
-) |>
-  filter(between(freq, 0.2, 0.6), param == "trans_y") |>
-  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task)) |>
-  summarise(
-    lower = median(freq),
-    upper = quantile(freq, 0.75),
-    .by = c(task, ses)
-  )
-
-ukb <- arrow::read_parquet(
-  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/ukb_spectrum.parquet"
-) |>
-  filter(between(freq, 0.2, 0.6), param == "trans_y") |>
-  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task)) |>
-  summarise(
-    freq = median(freq),
-    .by = c(sub, task)
-  ) |>
-  summarise(
-    lower = median(freq),
-    upper = quantile(freq, 0.75),
-    .by = c(task)
-  )
-
-spacetop <- arrow::read_parquet(
-  "/Users/psadil/git/manuscripts/motion/data/motion/derivatives/spacetop_spectrum.parquet"
-) |>
-  filter(between(freq, 0.2, 0.6), param == "trans_y") |>
-  slice_max(order_by = pxx, n = 1, by = c(sub, ses, task, run)) |>
-  summarise(
-    freq = median(freq),
-    .by = c(sub, task)
-  ) |>
-  summarise(
-    lower = median(freq),
-    upper = quantile(freq, 0.75),
-    .by = c(task)
-  )
-
-dplyr::bind_rows(
-  list(
-    abcd = abcd,
-    hcpa = hcpa,
-    hcpd = hcpd,
-    hcpya = hcpya,
-    ukb = ukb,
-    spacetop = spacetop
-  ),
-  .id = "dataset"
-) |>
-  DT::datatable(filter = "top")
-```
-
