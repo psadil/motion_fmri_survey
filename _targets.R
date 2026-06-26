@@ -2,7 +2,7 @@ library(targets)
 library(tarchetypes)
 library(crew)
 
-# TODO: add UKB Spectrum
+# TODO: convert figures to tikz
 
 source("R/hcp.R")
 source("R/ukb.R")
@@ -91,7 +91,16 @@ list(
   tar_target(hcpd, get_hcp(hcpd_source, hcpd_exclusion)),
   tar_target(
     abcd_source,
-    "data/motion/derivatives/abcd.parquet",
+    fs::dir_ls(
+      "data/abcc-4-0-0/abcc-xcp_d_v0.13.0",
+      glob = "*run*motion.tsv",
+      recurse = TRUE
+    ),
+    format = "file"
+  ),
+  tar_target(
+    abcd_phenotypes,
+    "data/abcc-4-0-0/rawdata/phenotype",
     format = "file"
   ),
   tar_target(
@@ -104,7 +113,7 @@ list(
     format = "file"
   ),
   tar_target(abcd_events, get_abcd_events(abcd_events_src)),
-  tar_target(abcd, get_abcd(abcd_source, abcd_exclusion)),
+  tar_target(abcd, get_abcd(abcd_source, abcd_exclusion, abcd_phenotypes)),
   tarchetypes::tar_group_by(
     datasets,
     bind_datasets(list(
@@ -115,8 +124,7 @@ list(
       abcd = abcd,
       spacetop = spacetop
     )),
-    dataset,
-    deployment = "main"
+    dataset
   ),
   tar_target(
     by_time,
@@ -191,14 +199,17 @@ list(
   ),
   tar_target(
     hcpa_spectrum,
-    get_hcpa_spectrum(src = hcpa_spectrum_src, hcpa = hcpa)
+    get_hcpa_spectrum(src = hcpa_spectrum_src, hcpa = hcpa, by_run = by_run)
   ),
   tar_target(
     hcpd_spectrum_src,
     "data/motion/derivatives/hcpd_spectrum.parquet",
     format = "file"
   ),
-  tar_target(hcpd_spectrum, get_hcpd_spectrum(hcpd_spectrum_src, hcpd)),
+  tar_target(
+    hcpd_spectrum,
+    get_hcpd_spectrum(hcpd_spectrum_src, hcpd, by_run = by_run)
+  ),
   tar_target(
     hcpya_spectrum_src,
     "data/motion/derivatives/hcpya_spectrum.parquet",
@@ -206,11 +217,11 @@ list(
   ),
   tar_target(
     hcpya_spectrum,
-    get_hcpya_spectrum(src = hcpya_spectrum_src, hcpya = hcpya)
+    get_hcpya_spectrum(src = hcpya_spectrum_src, hcpya = hcpya, by_run = by_run)
   ),
   tar_target(
     abcd_spectrum_src,
-    "data/motion/derivatives/abcd_spectrum.parquet",
+    "data/motion/derivatives/abcc_spectrum.parquet",
     format = "file"
   ),
   tar_target(
@@ -224,30 +235,20 @@ list(
   ),
   tar_target(
     spacetop_spectrum,
-    get_spacetop_spectrum(src = spacetop_spectrum_src, spacetop = spacetop)
+    get_spacetop_spectrum(
+      src = spacetop_spectrum_src,
+      spacetop = spacetop,
+      by_run = by_run
+    )
   ),
   tar_target(
     ukb_spectrum_src,
     "data/motion/derivatives/ukb_spectrum.parquet",
     format = "file"
   ),
-  tar_target(ukb_spectrum, get_ukb_spectrum(src = ukb_spectrum_src, ukb = ukb)),
-  tarchetypes::tar_group_by(
-    spectrums0,
-    bind_spectrum(list(
-      hcpya = hcpya_spectrum,
-      hcpa = hcpa_spectrum,
-      hcpd = hcpd_spectrum,
-      spacetop = spacetop_spectrum,
-      abcd = abcd_spectrum,
-      ukb = ukb_spectrum
-    )),
-    dataset
-  ),
   tar_target(
-    spectrums,
-    rescale_spectrum(spectrums0, by_run),
-    pattern = map(spectrums0)
+    ukb_spectrum,
+    get_ukb_spectrum(src = ukb_spectrum_src, ukb = ukb, by_run = by_run)
   ),
   tar_target(mriqc_src, "data/bold", format = "file"),
   tar_target(
@@ -457,15 +458,39 @@ list(
       demographics = demographics
     )
   ),
+  tar_target(fig_hcpa_spectrum, plot_spectrum(hcpa_spectrum), format = "qs"),
+  tar_target(fig_hcpd_spectrum, plot_spectrum(hcpd_spectrum), format = "qs"),
+  tar_target(fig_hcpya_spectrum, plot_spectrum(hcpya_spectrum), format = "qs"),
+  tar_target(fig_ukb_spectrum, plot_spectrum(ukb_spectrum), format = "qs"),
   tar_target(
-    fig_hcpa_spectrum,
-    plot_spectrum(spectrums, "hcpa"),
+    fig_spacetop_spectrum,
+    plot_spectrum(spacetop_spectrum),
+    format = "qs"
+  ),
+  tar_target(
+    fig_abcd_spectrum_00,
+    plot_spectrum(dplyr::filter(abcd_spectrum, ses == "Baseline")),
+    format = "qs"
+  ),
+  tar_target(
+    fig_abcd_spectrum_02,
+    plot_spectrum(dplyr::filter(abcd_spectrum, ses == "Year2")),
+    format = "qs"
+  ),
+  tar_target(
+    fig_abcd_spectrum_04,
+    plot_spectrum(dplyr::filter(abcd_spectrum, ses == "Year4")),
+    format = "qs"
+  ),
+  tar_target(
+    fig_abcd_spectrum_06,
+    plot_spectrum(dplyr::filter(abcd_spectrum, ses == "Year6")),
     format = "qs"
   ),
   tar_target(icc, get_icc(by_run)),
   tar_target(
     bpm_src,
-    "data/tabular/core/mental-health/mh_t_bpm.csv",
+    "data/abcc-4-0-0/rawdata/phenotype/mh_t_bpm.parquet",
     format = "file"
   ),
   tar_target(
@@ -474,5 +499,11 @@ list(
     format = "qs"
   ),
   tar_target(rest_fit, get_rest_fit(by_run, demographics), format = "qs"),
+  tar_target(
+    mr_y_qc__mot,
+    "data/abcc-4-0-0/rawdata/phenotype/mr_y_qc__mot.parquet",
+    format = "file"
+  ),
+  tar_target(fig_abcc_abcd, plot_abcc_abcd(abcd, mr_y_qc__mot), format = "qs"),
   tarchetypes::tar_quarto(report, quiet = FALSE)
 )

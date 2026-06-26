@@ -35,7 +35,7 @@ rescale <- function(.data, ...) {
 }
 
 
-get_hcpa_spectrum <- function(src, hcpa) {
+get_hcpa_spectrum <- function(src, hcpa, by_run) {
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
     add_run() |>
     dplyr::mutate(
@@ -51,10 +51,14 @@ get_hcpa_spectrum <- function(src, hcpa) {
     dplyr::inner_join(
       dplyr::distinct(hcpa, sub, task, run, ped, ses, scan),
       by = dplyr::join_by(sub, ses, task, ped, run)
-    )
+    ) |>
+    dplyr::select(-ped, -run) |>
+    rescale(param, sub, ses, task, scan) |>
+    dplyr::mutate(dataset = "hcpa") |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
-get_hcpd_spectrum <- function(src, hcpd) {
+get_hcpd_spectrum <- function(src, hcpd, by_run) {
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
     add_run() |>
     dplyr::mutate(
@@ -78,10 +82,15 @@ get_hcpd_spectrum <- function(src, hcpd) {
     dplyr::inner_join(
       dplyr::distinct(hcpd, sub, task, run, ped, ses, scan),
       by = dplyr::join_by(sub, ses, task, ped, run)
-    )
+    ) |>
+    dplyr::select(-ped, -run) |>
+    dplyr::filter(scan == 1) |>
+    rescale(param, sub, ses, task, scan) |>
+    dplyr::mutate(dataset = "hcpd") |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
-get_hcpya_spectrum <- function(src, hcpya) {
+get_hcpya_spectrum <- function(src, hcpya, by_run) {
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
     add_run() |>
     dplyr::mutate(
@@ -105,46 +114,57 @@ get_hcpya_spectrum <- function(src, hcpya) {
     dplyr::inner_join(
       dplyr::distinct(hcpya, sub, task, run, ped, ses, scan),
       by = dplyr::join_by(sub, ses, task, ped, run)
-    )
+    ) |>
+    dplyr::select(-ped, -run) |>
+    dplyr::filter(scan == 1) |>
+    rescale(param, sub, ses, task, scan) |>
+    dplyr::mutate(dataset = "hcpya") |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
 get_abcd_spectrum <- function(src, by_run) {
+  # for simplicity, keep only participants with the most typical
+  # frequencies (different scan lengths result in diff freqs)
+
   to_keep <- by_run |>
     dplyr::filter(dataset == "abcd") |>
     dplyr::distinct(sub, task, ses, scan) |>
     dplyr::mutate(scan = as.integer(scan))
 
-  unique_ses_src <- duckplyr::read_parquet_duckdb(src) |>
-    dplyr::distinct(ses, run) |>
-    dplyr::collect()
-  out <- vector("list", nrow(unique_ses_src))
-  for (i in seq_len(nrow(unique_ses_src))) {
-    out[[i]] <- duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
-      dplyr::filter(
-        ses == unique_ses_src$ses[[i]],
-        run == unique_ses_src$run[[i]]
-      ) |>
-      convert_abcd_ses() |>
-      dplyr::rename(scan = run) |>
-      do_casting() |>
-      dplyr::collect() |>
-      dplyr::inner_join(to_keep, by = dplyr::join_by(sub, ses, task, scan))
-  }
-  dplyr::bind_rows(out)
+  freqs <- duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::filter(run == 1) |>
+    dplyr::count(ses, task, freq) |>
+    dplyr::filter(n > 10)
+
+  duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::rename(scan = run) |>
+    dplyr::filter(scan == 1) |>
+    dplyr::semi_join(to_keep, by = dplyr::join_by(sub, ses, task, scan)) |>
+    dplyr::semi_join(freqs, by = dplyr::join_by(ses, task, freq)) |>
+    dplyr::collect() |>
+    rescale(param, sub, ses, task, scan) |>
+    dplyr::mutate(dataset = "abcd") |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
-get_spacetop_spectrum <- function(src, spacetop) {
+get_spacetop_spectrum <- function(src, spacetop, by_run) {
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
-    dplyr::mutate(ses = as.integer(ses), ped = "AP", scan = run) |> # need to strip leading 0 before do_casting
+    dplyr::mutate(ses = as.integer(ses), scan = run) |> # need to strip leading 0 before do_casting
     do_casting() |>
     dplyr::inner_join(
-      dplyr::distinct(spacetop, sub, task, run, ped, ses, scan),
-      by = dplyr::join_by(sub, ses, task, ped, run, scan)
-    )
+      dplyr::distinct(spacetop, sub, task, run, ses, scan),
+      by = dplyr::join_by(sub, ses, task, run, scan)
+    ) |>
+    dplyr::select(-run) |>
+    dplyr::filter(scan == 1) |>
+    rescale(param, sub, ses, task, scan) |>
+    dplyr::mutate(dataset = "spacetop") |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
-bind_spectrum <- function(spectrums) {
-  dplyr::bind_rows(spectrums, .id = "dataset") |> dplyr::select(-ped, -run)
+bind_spectrum <- function(spectrums, by_run) {
+  dplyr::bind_rows(spectrums, .id = "dataset") |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
 rescale_spectrum <- function(spectrums, by_run) {
@@ -153,14 +173,18 @@ rescale_spectrum <- function(spectrums, by_run) {
     dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
-get_ukb_spectrum <- function(src, ukb) {
+get_ukb_spectrum <- function(src, ukb, by_run) {
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
-    dplyr::mutate(ped = "AP", scan = 1, run = 1) |>
+    dplyr::mutate(scan = 1) |>
     do_casting() |>
     dplyr::inner_join(
-      dplyr::distinct(ukb, sub, task, run, ped, ses, scan),
-      by = dplyr::join_by(sub, ses, task, ped, run, scan)
-    )
+      dplyr::distinct(ukb, sub, task, ses, scan),
+      by = dplyr::join_by(sub, ses, task, scan)
+    ) |>
+    dplyr::filter(ses == "3") |>
+    rescale(param, sub, ses, task, scan) |>
+    dplyr::mutate(dataset = "ukb") |>
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
 }
 
 get_limits <- function(
@@ -216,7 +240,8 @@ prep_tbl_freq_limits <- function(
     list(
       Year2 = dplyr::filter(abcd_spectrum, ses == "Year2"),
       Year4 = dplyr::filter(abcd_spectrum, ses == "Year4"),
-      Baseline = dplyr::filter(abcd_spectrum, ses == "Baseline")
+      Baseline = dplyr::filter(abcd_spectrum, ses == "Baseline"),
+      Year6 = dplyr::filter(abcd_spectrum, ses == "Year6")
     ),
     get_limits
   ) |>

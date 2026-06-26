@@ -66,7 +66,8 @@ targets::tar_load(c(
   freq_limits,
   icc,
   compare_datasets_fit,
-  rest_fit
+  rest_fit,
+  fig_power
 ))
 ```
 
@@ -81,7 +82,7 @@ Unfortunately, participant motion correlates systematically with demographic and
 
 Consider the case of the ABCD, which, to our knowledge, is the only population-level dataset that has been used to explore these relationships between motion, participant characteristics, motion-based exclusion, and biased downstream inferences [@peverill_balancing_2025]. One of the strengths of the ABCD study design is the use of multi-stage probability sampling, which resulted in a sample population that approximately represents the US [@garavan_recruiting_2018]. Although this approximate matching is imperfect [@gard_weight_2023; @compton2019ensuring] and also conflicts with other goals of the ABCD such as the recruitment of a relatively high proportion of children who exhibit symptoms related to mental health issues, a sample population that closely resembles the target (US) population along major axes like race and sex simplifies some analyses. However, excluding participants based on motion alters the distribution of even those characteristics that resemble the target population, like race and ethnicity [@cosgrove_limits_2022]. For example, non-white children were approximately twice as likely as white children to be excluded based on motion. In some circumstances, such losses can be mitigated by statistical techniques [@gard_weight_2023; @lewinn_sample_2017; @nebel_accounting_2022]. But there remains a need to understand the prevelance of these issues in datasets beyond the ABCD, to understand how routine preprocessing decisions shape representativeness and, ultimately, to understand the generalizability of conclusions drawn from population neuroimaging studies.
 
-Here, we sought to understand the scope of these issues across the neuroimaging field, exploring the extent to which motion acts as a population-level filter (that is, a non-random selection mechanism that determines which participants remain available for analyses). To do this, we survey head motion across six prominent, publically available datasets spanning childhood through older adulthood: the Human Connectome Project-Young Adult [HCPYA @marcus_human_2013], UK Biobank [UKB @alfaro_image_2018], Human Connectome Project in Development [HCPD @harms_extending_2018], Human Connectome Project in Aging [HCPA @harms_extending_2018], the Adolescent Brain Cognitive Development [ABCD @casey_adolescent_2018] study, and the Spatial Topology (Spacetop) project [@jung_spacetop_2025]. Together, these datasets comprise more than 50,000 unique participants and more than 240,000 scans. We further benchmark our findings against motion distributions reported by MRIQC [@esteban_mriqc_2017], which, as of writing, aggregates data from over 1.5 million scans. By quantifying motion across large-scale cohorts, we assess both its magnitude and its demographic consequences under commonly applied exclusion thresholds. We address four questions ([@tbl-overview]): (A) How much do participants move across major datasets? (B) In these datasets, which participant characteristics are related to motion? (C) Which demographic groups are disproportionately excluded? and (D) What are the implications for sample composition and downstream inference? We find that exclusion is both substantial and demographically patterned, with negative implications  for the generalizability of population neuroimaging findings. 
+Here, we sought to understand the scope of these issues across the neuroimaging field, exploring the extent to which motion acts as a population-level filter (that is, a non-random selection mechanism that determines which participants remain available for analyses). To do this, we survey head motion across six prominent, publically available datasets spanning childhood through older adulthood: the Human Connectome Project-Young Adult [HCPYA @marcus_human_2013], UK Biobank [UKB @alfaro_image_2018], Human Connectome Project in Development [HCPD @harms_extending_2018], Human Connectome Project in Aging [HCPA @harms_extending_2018], the Adolescent Brain Cognitive Development [ABCD @casey_adolescent_2018] study, and the Spatial Topology (Spacetop) project [@jung_spacetop_2025]. Together, these datasets comprise more than 50,000 unique participants and more than 300,000 scans. We further benchmark our findings against motion distributions reported by MRIQC [@esteban_mriqc_2017], which, as of writing, aggregates data from over 1.5 million scans. By quantifying motion across large-scale cohorts, we assess both its magnitude and its demographic consequences under commonly applied exclusion thresholds. We address four questions ([@tbl-overview]): (A) How much do participants move across major datasets? (B) In these datasets, which participant characteristics are related to motion? (C) Which demographic groups are disproportionately excluded? and (D) What are the implications for sample composition and downstream inference? We find that exclusion is both substantial and demographically patterned, with negative implications  for the generalizability of population neuroimaging findings. 
 
 ::: {#tbl-overview}
 
@@ -102,14 +103,12 @@ Who is excluded? & \tabitem When using common exclusion criteria, rates of exclu
   & \tabitem Excluding participants based on motion substantially alters the sex, age, and BMI composition of datasets (\cref{fig-lost-by-group}). \\
 Do the exclusions matter? & \tabitem Even with modern denoising techniques, motion substantially changes functional connectivity (\cref{fig-mac}).  \\
   & \tabitem Motion-related exclusion increases study costs and decreases model predictive performance (\cref{fig-cost}). \\
-  & \tabitem Statistical power in Brain-Wide Associations Studies is minimally affected by motion-based exclusion for the largest datasets, but reduced by \SI{25}{\percent} in smaller (600-800 participant) datasets that sample from high-motion demographics (HCPA, HCPD, \cref{tbl-power}). \\
+  & \tabitem Statistical power in Brain-Wide Associations Studies is minimally affected by motion-based exclusion for the largest datasets, but reduced by \SI{25}{\percent} in smaller (600-800 participant) datasets that sample from high-motion demographics (HCPA, HCPD, \cref{fig-power}). \\
   & \tabitem Predictive models trained with high-motion participants acheive higher levels of performance than those trained with low-motion participants (\cref{fig-performance}). \\  
 \bottomrule
 \end{tabularx}
 \end{table}
 ```
-
-
 
 Results Overview. Analyses aim to answer four main questions. Several of the findings reported here have been reported elsewhere (e.g., relationships with motion and BMI); here, we show that they are present in several large-scale datasets (ABCD, HCPYA, HCPD, HCPA, UKB, SpaceTop), and that in these datasets there remains an unresolved tension between biasing study results by including low-quality (that is, motion-corrupted) data and biasing study results by excluding high-motion participants.
 
@@ -122,7 +121,7 @@ Results Overview. Analyses aim to answer four main questions. Several of the fin
 
 We extracted sociodemographic, clinical, and fMRI data from six publicly available datasets. Across these datasets, several types of tasks were employed. As part of this survey, we examined the temporal properties of motion, hypothesizing that they would vary with task design. Below, we briefly summarize the design of each study. For details of each task, please see the cited references.
 
-From each dataset, participants were excluded from the analyses if key demographic variables were unavailable. For demographics, we focused on three that were generally available: age, sex, and body mass index (BMI). When a variable was unavailable across the entire dataset, we note this explicitly below. Additional dataset-specific exclusion criteria are listed below. Note that these exclusions differ from the motion-based exclusions that are the primary subject of this survey. Individual scans were also excluded when they differed from the modal length for that dataset and task.
+From each dataset, participants were excluded from the analyses if key demographic variables were unavailable. For demographics, we focused on three that were generally available: age, sex, and body mass index (BMI). When a variable was unavailable across the entire dataset, we note this explicitly below. Additional dataset-specific exclusion criteria are listed below. Note that these exclusions differ from the motion-based exclusions that are the primary subject of this survey.
 
 ### The HCP-Young Adult (HCPYA) 1200 Subjects Data Release
 
@@ -140,7 +139,7 @@ Participants were excluded for being flagged for exhibiting any of several of th
 
 The HCPD Release 2.0 includes `r dplyr::filter(orig_counts, dataset=="hcpd") |> purrr::pluck("n")` participants aged 5-21 years, with imaging data collected at four sites (Harvard, University of California, Los Angeles, Washington University in St. Louis, and the University of Minnesota). All MRI data were acquired using 3T Siemens Prisma scanners (Siemens, Erlangen, Germany). Participants between 5- and 7-years old were scanned using a pediatric 32-channel head coil developed by Ceresensa ([ceresensa.com](https://ceresensa.com)); participants between 8– and 21-years old were scanned using the Siemens 32-channel Prisma head coil. Full acquisition details are provided in [@harms_extending_2018].
 
-Three tasks were administered [@somerville_lifespan_2018]: a reward guessing task with consistent block timing (Guessing), a go/no-go inhibitory control task with jittered timing (CARIT), and a face/shape emotion-matching task adapted from the HCPYA (Emotion). For 5- to 7-year-old participants, six resting-state fMRI runs of approximately 3.5 minutes each were acquired (alternating AP/PA phase encoding); for 8- to 21-year-old participants, four runs of approximately 6.5 minutes each were acquired. For several analyses, we split the HCPD by age cohort (5-7 vs 8+).
+Three tasks were administered [@somerville_lifespan_2018]: a reward guessing task with consistent block timing (Guessing), a go/no-go inhibitory control task with jittered timing (CARIT), and a face/shape emotion-matching task adapted from the HCPYA (Emotion). For 5- to 7-year-old participants, six resting-state fMRI runs of approximately 3.5 minutes each were acquired (alternating AP/PA phase encoding); for 8- to 21-year-old participants, four runs of approximately 6.5 minutes each were acquired. For several analyses, we split the HCPD by age cohort (5-7 vs 8+). 
 
 #### Exclusions
 
@@ -156,15 +155,17 @@ The HCPA dataset includes `r dplyr::filter(orig_counts, dataset=="hcpa") |> purr
 
 ### Adolescent Brain Child Development (ABCD)
 
-The ABCD study is an ongoing longitudinal study of more than 10,000 9- to 10-year-olds in the United States through adolescence, with neuroimaging data collected every two years. The dataset was enriched with children who exhibited internalizing and externalizing symptoms. In the release accessed here (5.1), there were `r dplyr::filter(orig_counts, dataset=="abcd") |> purrr::pluck("n")` participants. For a detailed description of recruitment, demographics, and study exclusion rules, see [@garavan_recruiting_2018; @barch_demographic_2018; @thompson_structure_2019]. For a detailed description of the acquisition, see the report by [@casey_adolescent_2018].
+The ABCD study is an ongoing longitudinal study of more than 10,000 9- to 10-year-olds in the United States through adolescence, with neuroimaging data collected every two years. The dataset was enriched with children who exhibited internalizing and externalizing symptoms. In the release accessed here (7.0), there were `r dplyr::filter(orig_counts, dataset=="abcd") |> purrr::pluck("n")` participants. For a detailed description of recruitment, demographics, and study exclusion rules, see [@garavan_recruiting_2018; @barch_demographic_2018; @thompson_structure_2019]. For a detailed description of the acquisition, see the report by [@casey_adolescent_2018]. Our analyses focused on data curated as a part of the ABCD Community Collection [@feczko2021adolescent].
 
 Three tasks were administered: a monetary incentive delay task with jittered trial timing [MID @knutson_fmri_2000], a stop-signal task in which response timing is determined by performance [SST @logan_spatial_1994], and an emotional N-back task with consistent block timing [EN-back @barch_function_2013]. Resting-state fMRI comprised four 5-minute runs; participants were instructed to fixate on a crosshair with eyes open.
 
 As a part of our analyses of the ABCD dataset, we categorized ABCD participants as exhibiting externalizing, internalizing, or attention problems. These categories were based on the normed scores for the Brief Problem Monitor [@achenbach2009achenbach], using a cutoff of $\geq 65$ (averaged across sessions for which the score was available). 
 
+Unique to the ABCD dataset, the motion parameters were not filtered for this report (see @sec-filter). Instead, we used the filtered motion traces as provided by the ABCD Community Collection.
+
 #### Exclusions 
 
-`r dplyr::filter(orig_counts, dataset=="abcd") |> purrr::pluck("n") - dplyr::filter(by_run, dataset=="abcd") |> dplyr::distinct(sub) |> dplyr::count() |> purrr::pluck("n")` participants were excluded due to missing demographics from least one session for missing demographics, or when all runs were flagged by the official ABCD quality control procedures and additional factors [@hagler_image_2019]. Specifically, we excluded scans shorter than the modal length, scans failing the ABCD quality review for reasons other than insufficient volumes after default-threshold censoring (instrument: `mri_y_qc_incl`), and resting-state runs labeled as Run 5 or 6. This resulted in the exclusion of `r duckplyr::read_parquet_duckdb(abcd_source) |> dplyr::distinct(sub, ses, task, run) |> dplyr::count() - by_run |> dplyr::filter(dataset=="abcd") |> dplyr::distinct(task, scan, ses, sub) |> nrow()` out of `r duckplyr::read_parquet_duckdb(abcd_source) |> dplyr::distinct(sub, ses, task, run) |> dplyr::count()` scans.
+`r dplyr::filter(orig_counts, dataset=="abcd") |> purrr::pluck("n") - dplyr::filter(by_run, dataset=="abcd") |> dplyr::distinct(sub) |> dplyr::count() |> purrr::pluck("n")` participants were excluded due to missing demographics from least one session, or when all runs were flagged by the official ABCD quality control procedures and additional factors [@hagler_image_2019]. Specifically, we excluded scans that did not satisfy the ABCD inclusion criteria, excluding those criteria that were related to censored frames (inclusion: fMRI raw QC, T1 raw QC, behavior passed, E-prime timing match OR ignore E-prime mismatch, fMRI B0 unwarp available, FreeSurfer QC not failed, fMRI manual post-processing QC not failed, fMRI registration to T1w, fMRI dorsal cutoff score, fMRI ventral cutoff score, derived results exist). Additionally, all resting-state scans with run above 4 or task scans with run above 2 were excluded, and all runs were trucated to the modal length by task. This resulted in the exclusion of `r length(abcd_source) - (by_run |> dplyr::filter(dataset=="abcd") |> dplyr::distinct(task, scan, ses, sub) |> nrow())` out of `r length(abcd_source)` scans.
 
 ### UK Biobank (UKB)
 
@@ -190,7 +191,7 @@ $$
 FD(t) = |\Delta d_{xt}| + |\Delta d_{yt}| + |\Delta d_{zt}| + |\Delta \alpha_{t}| + |\Delta \beta_{t}| + |\Delta \gamma_{t}| 
 $$
 
-where $\Delta$ denotes the difference operator (i.e., $\Delta \beta_t = \beta_t - \beta_{t-1} $). Here $d_{xt}$, $d_{yt}$, and $d_{zt}$ denote translations and $\alpha_t$, $\beta_t$, $\gamma_t$ denote rotations, each measured relative to a reference volume. By convention, the FD at time $t=0$ is set equal to zero and excluded from all analyses.
+where $\Delta$ denotes the difference operator (i.e., $\Delta \beta_t = \beta_t - \beta_{t-1}$). Here $d_{xt}$, $d_{yt}$, and $d_{zt}$ denote translations and $\alpha_t$, $\beta_t$, $\gamma_t$ denote rotations, each measured relative to a reference volume. By convention, the FD at time $t=0$ is set equal to zero and excluded from all analyses.
 
 ## Defining Framewise Displacement Thresholds for Unacceptable Motion {#sec-thresholding}
 
@@ -206,11 +207,12 @@ Across all analyzed datasets, motion traces exhibited clear power at frequencies
 
 In each scan condition, respiration frequencies were estimated from the translation parameter corresponding to the phase-encoding axis. Motion parameters were linearly detrended, and the spectrum was estimated with a multi-taper filter (number of points: 512; half bandwidth: 8). The respiration frequency was identified as the peak frequency in the range \SIrange{0.1}{0.6}{\hertz}. Peak frequencies were averaged across scans within participants for each scan condition. 
 
-To remove respiratory-related frequencies, we adopted an approach similar to the "Fixed Frequency" method of [@fair_correction_2020]. The lower and upper cutoff frequencies of a second-order infinite-impulse-response notch filter were set at the median and third quartile of the distribution of peak frequencies within each condition and session. Although peak frequencies were estimated from the motion parameters rather than from direct respiratory recordings, the resulting notch filter closely resembled the respiration band filter reported by @fair_correction_2020 [@tbl-filters].
+To remove respiratory-related frequencies, we adopted an approach similar to the "Fixed Frequency" method of [@fair_correction_2020]. The lower and upper cutoff frequencies of a second-order infinite-impulse-response notch filter were set at the median and third quartile of the distribution of peak frequencies within each condition and session. Although peak frequencies were estimated from the motion parameters rather than from direct respiratory recordings, the resulting notch filter closely resembled the respiration band filter reported by @fair_correction_2020 (@tbl-filters).
 
 ::: {#tbl-filters}
 
 ```{r filters}
+#| eval: false
 freq_limits |>
   dplyr::mutate(
     dataset = dplyr::if_else(
@@ -226,7 +228,7 @@ freq_limits |>
   gt::fmt_missing(missing_text = "")
 ```
 
-Summary of Parameters Used for Notch Filtering. Each entry indicates the average (across conditions) upper and lower frequency for the filter designed to remove respiration frequencies from motion parameters. These limits are comparable to the range observed in a subset of ABCD participants (N=62) using a respiratory band: \SIrange{0.31}{0.43}{\hertz} [@fair_correction_2020].
+Summary of Parameters Used for Notch Filtering. Each entry indicates the average (across conditions) upper and lower frequency for the filter designed to remove respiration frequencies from motion parameters. These limits are comparable to the range observed in a subset of ABCD participants (N=62) using a respiratory band: \SIrange{0.31}{0.43}{\hertz} [@fair_correction_2020]. Note that, the motion parameters for the ABCD were filtered as a part of the ABCD Community Collection [@feczko2021adolescent].
 
 :::
 
@@ -250,7 +252,7 @@ To estimate the extent to which including motion-riddled data can negatively imp
 
 This measure is based on the idea that poor data quality biases connectivity estimates. If removing a fixed proportion of a scan based on data quality results in a greater change in functional connectivity than removing the same proportion at random, then quality-based censoring yields less-biased estimates. We used this measure to show that even scans that have undergone extensive preprocessing remain substantially biased by the inclusion of high-motion (that is, low-quality) data.
 
-To calculate the MAC, we used a 500-participant subset of the UKB. Following [@williams_advancing_2022], 10 surrogate timeseries were calculated at each level of thresholding. For these analyses, we considered three preprocessing strategies: (1) the standard UKB preprocessing stream [fix+smooth, see @alfaro_image_2018], (2) regression-based denoising comprising 24 motion parameters [@friston_movement-related_1996], 4 spatial parameters (CSF, WM, and their lag-one differences), and bandpass filtering (Butterworth order 5, \SIrange{0.08}{0.9}{\hertz}), and (3) bandpass filtering only. In all cases, datasets were spatially smoothed using a \SI{6}{\milli\meter} FWHM Gaussian kernel. Connectivities were estimated using the 7 Network Schaefer 100 atlas [@mansour_connectomes_2023, schaefer_local_2018]. Data quality was assessed using framewise displacement and DPD measured in the uncleaned (immediately before denoising) scans (@sec-dvars).
+To calculate the MAC, we used a 500-participant subset of the UKB. Following [@williams_advancing_2022], 10 surrogate timeseries were calculated at each level of thresholding. For these analyses, we considered three preprocessing strategies: (1) the standard UKB preprocessing stream [fix+smooth, see @alfaro_image_2018], (2) regression-based denoising comprising 24 motion parameters [@friston_movement-related_1996], 4 spatial parameters (CSF, WM, and their lag-one differences), and bandpass filtering (Butterworth order 5, \SIrange{0.08}{0.9}{\hertz}), and (3) bandpass filtering only. In all cases, datasets were spatially smoothed using a \SI{6}{\milli\meter} FWHM Gaussian kernel. Connectivities were estimated using the 7 Network Schaefer 100 atlas [@mansour_connectomes_2023; @schaefer_local_2018]. Data quality was assessed using framewise displacement and DPD measured in the uncleaned (immediately before denoising) scans (@sec-dvars).
 
 ## DVARS {#sec-dvars}
 
@@ -406,7 +408,7 @@ Average Motion by Time in the SpaceTop Dataset. Data plotted as in @fig-all-by-t
 
 In general, motion tended to increase throughout a session, such that later runs showed more motion than earlier ones (\crefrange{fig-all-by-time-hcpya}{fig-all-by-time-spacetop}). For example, in all three ABCD sessions, average motion increased progressively across resting-state runs. Likewise, in the first session of SpaceTop, each subsequent social run exhibited higher average motion than the previous one. This progressive increase suggests fatigue, reduced compliance, or discomfort as plausible contributors to within-session motion drift. However, this pattern did not hold for the resting-state scans in the HCPD and HCPA datasets, where the second resting-state run often had somewhat less motion than the first, suggesting that session structure and scheduling may modulate temporal patterns of movement. 
 
-Within many scans, motion exhibited three distinct temporal patterns (\crefrange{fig-all-by-time-hcpya}{fig-all-by-time-spacetop}). **Settling-in effects**: In some datasets, motion in the first few frames was substantially lower than in subsequent frames (e.g., UKB, @fig-all-by-time-ukb), or conversely, higher (e.g., ABCD, @fig-all-by-time-abcd), reflecting different initial states of participant arousal or comfort. **Drift**: In most datasets, motion tended to increase throughout runs. Temporal changes in motion could be profound, with the average FD increasing by as much as \SI{150}{\percent} (e.g., HCPA, CARIT task, @fig-all-by-time-hcpa) from the start to the end of the scan. **Task-Correlated motion**: Motion was often highly correlated with the task structure. For example, the task scan in the UKB (@fig-all-by-time-ukb) used identical timing for all participants, producing visible blocks of elevated motion in the cross-participant average as well as sharp spikes at the moments of individual button presses.  Similarly, the HCPYA Motor task (@fig-all-by-time-hcpya) shows distinct motion profiles for different blocks (e.g., tongue movements vs. toe movements), illustrating how specific task demands physically perturb the head.
+Within many scans, motion exhibited three distinct temporal patterns (\crefrange{fig-all-by-time-hcpya}{fig-all-by-time-spacetop}). **Settling-in effects**: In some datasets, motion in the first few frames was substantially lower than in subsequent frames (e.g., UKB, @fig-all-by-time-ukb), or conversely, higher (e.g., ABCD, @fig-all-by-time-abcd). While this could reflect different initial states of participant arousal or comfort, the differences may largely be driven by differences in reference volume for motion correction across datasets (e.g., the UKB uses a separate, reference image, whereas the ABCD uses the temporal average volume). **Drift**: In most datasets, motion tended to increase throughout runs. Temporal changes in motion could be profound, with the average FD increasing by as much as \SI{150}{\percent} (e.g., HCPA, CARIT task, @fig-all-by-time-hcpa) from the start to the end of the scan. **Task-Correlated motion**: Motion was often highly correlated with the task structure. For example, the task scan in the UKB (@fig-all-by-time-ukb) used identical timing for all participants, producing visible blocks of elevated motion in the cross-participant average as well as sharp spikes at the moments of individual button presses.  Similarly, the HCPYA Motor task (@fig-all-by-time-hcpya) shows distinct motion profiles for different blocks (e.g., tongue movements vs. toe movements), illustrating how specific task demands physically perturb the head.
 
 These findings demonstrate that head motion is not a static property of a dataset but varies systematically across age, session position, and task structure. Such structured variation has important implications for how motion thresholds are applied and interpreted across large, heterogeneous cohorts.
 
@@ -467,7 +469,7 @@ To determine whether motion reflects transient noise or stable individual differ
 ::: {#fig-groups}
 
 ```{r groups}
-#| fig-height: 5
+#| fig-height: 6
 #| fig-width: 6
 targets::tar_read(fig_groups)
 ```
@@ -504,12 +506,12 @@ Having established that motion is stable within individuals, we next examined ho
 
 ```{r fit-contrast}
 tidy_contrast_dataset <- compare_datasets_fit |>
-  emmeans::emmeans(~ manufacturer:age) |>
+  emmeans::emmeans(~ manufacturer:age, at = list(age = 9)) |>
   emmeans::contrast(list(HCPD_vs_Others = c(-1 / 3, -1 / 3, -1 / 3, 1))) |>
   broom::tidy(conf.int = TRUE)
 ```
 
-Average framewise displacement exhibited a U-shaped relationship with age (@fig-chart a), with the youngest (HCPD, ABCD) and oldest (HCPA, UKB) participants moving more than young and middle-aged adults. This pattern is consistent with developmental differences in motor control and age-related changes in physiology or comfort during scanning. However, substantial differences were also observed across datasets with overlapping age ranges. For example, adolescents in ABCD exhibited substantially higher motion than similarly aged participants in HCPD. To test this quantitatively, we fitted a linear mixed model (estimated using REML and nloptwrap optimizer) to predict average motion, and contrasting the two datasets (@sec-fits). The difference in motion between the two datasets was statistically significant (`r format_tidy_contrast(tidy_contrast_dataset)`), indicating that motion was lower by around \SI{`r abs(round(tidy_contrast_dataset$estimate, 2))`}{\milli\meter} in the HCPD dataset overall. 
+Average framewise displacement exhibited a U-shaped relationship with age (@fig-chart a), with the youngest (HCPD, ABCD) and oldest (HCPA, UKB) participants moving more than young and middle-aged adults. This pattern is consistent with developmental differences in motor control and age-related changes in physiology or comfort during scanning. However, substantial differences were also observed across datasets with overlapping age ranges. For example, adolescents in ABCD exhibited higher motion than similarly aged participants in HCPD. To test this quantitatively, we fitted a linear mixed model to predict average motion and contrasted the two datasets (@sec-fits). According to that analysis, a 9 year-old participating in the ABCD or HCPD would display statistically significant difference in motion (`r format_tidy_contrast(tidy_contrast_dataset)`), indicating that motion is lower by around \SI{`r abs(round(tidy_contrast_dataset$estimate, 2))`}{\milli\meter} in the HCPD dataset.
 
 #### BMI
 
@@ -518,13 +520,20 @@ rest_tidy <- rest_fit |> broom.mixed::tidy(conf.int = TRUE)
 rest_bmi <- dplyr::filter(rest_tidy, term == "bmi")
 ```
 
-Replicating previous findings [@bolton_agito_2020; @ward_head_2024; @teo_comparison_2024], we observed that motion increased with BMI across datasets (@fig-chart b). In resting-state scans, the effect of BMI was significant (`r format_tidy_contrast(rest_bmi)`). Despite its small effect size at the individual level, this association has population-level implications in large cohorts where BMI is unevenly distributed.
+Replicating previous findings [@bolton_agito_2020; @ward_head_2024; @teo_comparison_2024], we observed that motion increased with BMI across datasets (@fig-chart b). In resting-state scans, the effect of BMI was significant (`r format_tidy_contrast(rest_bmi, digits=3)`). Despite its small effect size at the individual level, this association has population-level implications in large cohorts where BMI is unevenly distributed.
 
 #### Sex 
 
 ```{r fit-sex}
+
 tidy_contrast_sex <- rest_fit |>
-  emmeans::emmeans(~ sex:age:bmi) |>
+  emmeans::emmeans(
+    ~ sex:age:bmi,
+    at = list(
+      age = mean(demographics$age),
+      bmi = mean(demographics$bmi, na.rm = TRUE)
+    )
+  ) |>
   emmeans::contrast("pairwise") |>
   broom::tidy(conf.int = TRUE)
 
@@ -536,20 +545,20 @@ avg_abcd_bmi <- tibble::tibble(rest_fit$frame) |>
 contrast_sex_age <- rest_fit |>
   emmeans::emmeans(
     ~ sex * age,
-    at = list(age = c(8, 12), bmi = avg_abcd_bmi)
+    at = list(age = c(9, 15), bmi = avg_abcd_bmi)
   ) |>
   emmeans::contrast(interaction = "pairwise") |>
   broom::tidy(conf.int = TRUE)
 ```
 
-There was a statistically significant difference for sex, with females moving slightly less than males (`r format_tidy_contrast(tidy_contrast_sex)`). Importantly, sex differences were more pronounced in younger cohorts (@fig-chart c), suggesting developmental interactions. Indeed, at the BMI that is equal to the average for ABCD (`r round(avg_abcd_bmi, 2)`), there was a significant interaction between the effect of sex at age 8 as compared to the effect of sex at age 12 (`r format_tidy_contrast(contrast_sex_age)`), indicating that sex differences diminish with increasing age during development.
+There was a statistically significant difference for sex, with females moving slightly less than males (estimated marginal mean contrast at average age `r round(mean(demographics$age), digits=2)` and average bmi `r round(mean(demographics$bmi, na.rm = TRUE), digits=2)`: `r format_tidy_contrast(tidy_contrast_sex, digits=3)`). Importantly, sex differences were more pronounced in younger cohorts (@fig-chart c), suggesting developmental interactions. Indeed, at the BMI that is equal to the average for ABCD (`r round(avg_abcd_bmi, 2)`), there was a significant interaction between the effect of sex at age 9 as compared to the effect of sex at age 15 (`r format_tidy_contrast(contrast_sex_age, digits=3)`), indicating that sex differences diminish with increasing age during development.
 
 ::: {#tbl-highlow}
 
 ```{r highlow-abcd}
 targets::tar_read(group_highlow) |>
   dplyr::left_join(demographics) |>
-  dplyr::filter(dataset == "abcd") |>
+  dplyr::filter(dataset == "abcd", ses == "Baseline") |>
   dplyr::mutate(
     sex = factor(sex),
     dataset = dplyr::if_else(dataset == "abcd", "ABCD (Baseline)", "HCPYA")
@@ -577,7 +586,7 @@ targets::tar_read(group_highlow) |>
 ```
 
 
-Demographic Variables in High and Low Motion Subgroups (groups defined as in @fig-groups).
+Demographic Variables in High and Low Motion Subgroups (groups defined as in @fig-groups). In the ABCD table, demographics refer to the baseline session.
 
 :::
 
@@ -668,7 +677,19 @@ Finally, we turn to the impact of motion on downstream analyses, focusing on the
 
 First, we asked whether motion in these datasets influences downstream functional-connectivity estimates even after modern preprocessing [e.g., @power_spurious_2012]. Modern datasets often include sophisticated data cleaning, in part to account for the high degree of noise expected in community samples. One possibility is that these procedures mitigate motion-related bias sufficiently to reduce the need for aggressive participant exclusion. 
 
-To address this, we selected a subset of 500 participants from the UKB (average motion: \SI{0.20}{\milli\meter}, standard deviation: 0.09) and calculated the mean absolute change (MAC; @sec-censor). We note, however, that MAC provides only an indirect assessment of preprocessing sufficiency, in that a higher MAC may reflect reduced bias, increased estimate variability due to frame removal, or both. Nevertheless, several patterns are informative. The overall higher MAC for BP+smooth data indicates a larger effect of censoring in the uncleaned data (@fig-mac), consistent with preprocessing mitigating some noise. For both cleaning strategies considered, censoring by DPD has a larger effect than censoring by framewise displacement at more stringent thresholds (compare red vs. blue lines in @fig-mac). Assuming that DVARS is a more accurate measure of data quality than framewise displacement (even when the level of quality is driven by motion, e.g., @phạm_less_2023), then the higher MAC observed after DPD-based censoring suggests that residual bias remains in the functional connectivity estimates after both preprocessing strategies. Put differently, functional connectivity estimated after these preprocessing strategies may still be adversely affected by motion-corrupted volumes.
+```{r ukbmac}
+targets::tar_load(ukb_subs)
+ukb_subs_motion <- by_run |>
+  dplyr::filter(
+    dataset == "ukb",
+    sub %in% c(ukb_subs),
+    !filtered,
+    ses == 2,
+    task == "rest"
+  )
+```
+
+To address this, we selected a subset of `r length(ukb_subs)` participants from the UKB (average resting-state motion in the first session: \SI{`r round(mean(ukb_subs_motion$loc), digits=2)`}{\milli\meter}, standard deviation: `r round(sd(ukb_subs_motion$loc), digits=2)`) and calculated the mean absolute change (MAC; @sec-censor). We note, however, that MAC provides only an indirect assessment of preprocessing sufficiency, in that a higher MAC may reflect reduced bias, increased estimate variability due to frame removal, or both. Nevertheless, several patterns are informative. The overall higher MAC for BP+smooth data indicates a larger effect of censoring in the uncleaned data (@fig-mac), consistent with preprocessing mitigating some noise. For both cleaning strategies considered, censoring by DPD has a larger effect than censoring by framewise displacement at more stringent thresholds (compare red vs. blue lines in @fig-mac). Assuming that DVARS is a more accurate measure of data quality than framewise displacement (even when the level of quality is driven by motion, e.g., @phạm_less_2023), then the higher MAC observed after DPD-based censoring suggests that residual bias remains in the functional connectivity estimates after both preprocessing strategies. Put differently, functional connectivity estimated after these preprocessing strategies may still be adversely affected by motion-corrupted volumes.
 
 ::: {#fig-mac}
 
@@ -682,7 +703,7 @@ Mean Absolute Change in Functional Connectivity. Lines trace the average (across
 
 :::
 
-Having shown results consistent with a lingering impact of motion on preprocessed data, we next examined the effects of excluding participants from the studies. We first examined how observed exclusion rates affect the statistical power to detect a brain-wide association in datasets with a resting-state scan (e.g., a correlation between regional volume and a characteristic of interest, such as depression status). For illustration, we assumed a common correlation of 0.1 [@marek_reproducible_2022]. As seen in @tbl-power, across all datasets, the lenient motion threshold produced little reduction in power. The strict threshold had a larger impact, with the strongest effect in the smallest datasets. The UKB was sufficiently large that even a high rate of exclusion had only a minimal impact on statistical power, and likewise for ABCD (that is, with a sufficiently large dataset, excluding many people still results in a big sample size). In HCPA, power dropped from 0.77 to 0.29 when excluding participants based on raw motion traces, and to 0.48 when using filtered traces. HCPYA straddled the conventional target of 0.8 power, dropping from 0.90 in the full dataset to 0.63 or 0.79, depending on the exclusion rule.
+Having shown results consistent with a lingering impact of motion on preprocessed data, we next examined the effects of excluding participants from the studies. We first examined how observed exclusion rates affect the statistical power to detect a brain-wide association in datasets with a resting-state scan (e.g., a correlation between regional volume and a characteristic of interest, such as depression status). For reference, note that a common correlation for these associations is 0.1 [@marek_reproducible_2022]. As seen in @fig-power, across all datasets, the lenient motion threshold produced little reduction in power. The strict threshold had a larger impact, although the impact was only substantial in the smallest datasets ($n<1000$). That is, with a sufficiently large dataset (e.g., UKB, ABCD), excluding many people still results in high power. In HCPA, assuming an effect size of 0.1, power dropped from `r round(pwr::pwr.r.test(dplyr::filter(fig_power$data, dataset=="HCPA", !Filtered, name=="none")$n, r = 0.1)$power, digits=2)` to `r round(pwr::pwr.r.test(dplyr::filter(fig_power$data, dataset=="HCPA", !Filtered, name=="strict")$n, r = 0.1)$power, digits=2)` when excluding participants based on raw motion traces, and to `r round(pwr::pwr.r.test(dplyr::filter(fig_power$data, dataset=="HCPA", Filtered, name=="strict")$n, r = 0.1)$power, digits=2)` when using filtered traces. HCPYA straddled the conventional target of 0.8 power, dropping from `r pwr::pwr.r.test(dplyr::filter(fig_power$data, dataset=="HCPYA", !Filtered, name=="none")$n, r = 0.1)$power |> round(digits=2)` in the full dataset to `r pwr::pwr.r.test(dplyr::filter(fig_power$data, dataset=="HCPYA", !Filtered, name=="strict")$n, r = 0.1)$power |> round(digits=2)` or `r pwr::pwr.r.test(dplyr::filter(fig_power$data, dataset=="HCPYA", !Filtered, name=="strict")$n, r = 0.1)$power |> round(digits=2)`, depending on the exclusion rule (strict not filtered, strict filtered).
 
 ::: {#fig-cost}
 
@@ -700,37 +721,22 @@ To further explore the impact of exclusions on studies, we applied the economic 
 
 To estimate the cost of a study, we set a target sample size as the number of participants within each dataset. In ABCD, applying a common threshold of \SI{0.2}{\milli\meter} average framewise displacement nearly doubled the required recruitment budget to reach the target usable sample size (@fig-cost a). A stricter threshold of \SI{0.1}{\milli\meter} increased costs by more than an order of magnitude. In the UKB, applying the same strict threshold would result in more than a 20-fold increase in the cost required to achieve the desired sample size. Under fixed budgets, applying strict thresholds (\SI{0.1}{\milli\meter}) would result in less than one in four recruited participants contributing usable data (@fig-cost b). Thus, estimated budgets depend heavily on expected exclusion rates, which can vary substantially across datasets and populations. 
 
-Next, we examined the impact of exclusion rates on the framework's estimate of predictive performance ($\rho$), using the same large-scale datasets as above. We set the $k_i$ parameters to the average values derived from the ABCD resting-state data as reported by @ooi_longer_2025. This choice isolates the impact of reduced sample size under a fixed scan time, but it assumes that predictive performance does not change with the motion distribution and should therefore be viewed as a best-case scenario. In ABCD, excluding participants with average motion above \SI{0.2}{\milli\meter} eliminated roughly half of the sample, reducing predictive accuracy by approximately \SI{10}{\percent} (\autoref{fig-cost}c). Applying a stricter \SI{0.1}{\milli\meter} cutoff retained only \SI{7}{\percent} of participants and reduced expected accuracy to about \SI{50}{\percent} of its achievable maximum. In contrast, the UK Biobank exhibited only modest declines in performance because its remaining sample size remained above the inflection point of the performance curve. When exclusions push performance below this inflection point, expected predictive performance may decline sharply even when the analytic pipeline is otherwise optimal.
-
-::: {#tbl-power}
-
-```{=latex}
-\begin{table}[th]
-\centering
-\begin{tabular*}{0.75\linewidth}{llcccccc}
-\toprule
-& & \multicolumn{6}{c}{Motion Correction Strategy (BWAS Power)} \\
-\cmidrule(lr){3-8}
-& & \multicolumn{2}{c}{None} & \multicolumn{2}{c}{Lenient} & \multicolumn{2}{c}{Strict} \\
-\cmidrule(lr){3-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8}
-Dataset & Session/Cohort & Filtered & Raw & Filtered & Raw & Filtered & Raw \\
-\midrule
-ABCD & Baseline & 0.85 & 0.72 & 0.88 & 0.75 & 0.90 & 0.78 \\
- & Year2 & 0.91 & 0.88 & 0.93 & 0.89 & 0.95 & 0.91 \\
- & Year4 & 0.95 & 0.90 & 0.96 & 0.92 & 0.98 & 0.94 \\
-HCPA &  & 0.85 & 0.72 & 0.88 & 0.75 & 0.90 & 0.78 \\
-HCPD & 6-7 & 0.91 & 0.88 & 0.93 & 0.89 & 0.95 & 0.91 \\
- & 8+ & 0.95 & 0.90 & 0.96 & 0.92 & 0.98 & 0.94 \\
-HCPYA &  & 0.85 & 0.72 & 0.88 & 0.75 & 0.90 & 0.78 \\
-SpaceTop &  & 0.85 & 0.72 & 0.88 & 0.75 & 0.90 & 0.78 \\
-UKB &  & 0.85 & 0.72 & 0.88 & 0.75 & 0.90 & 0.78 \\
-        \bottomrule
-        \end{tabular*}
-\end{table}
+```{r accdata}
+targets::tar_load(acc_decrease_plot)
 ```
 
+Next, we examined the impact of exclusion rates on the framework's estimate of predictive performance ($\rho$), using the same large-scale datasets as above. We set the $k_i$ parameters to the average values derived from the ABCD resting-state data as reported by @ooi_longer_2025. This choice isolates the impact of reduced sample size under a fixed scan time, but it assumes that predictive performance does not change with the motion distribution and should therefore be viewed as a best-case scenario. In ABCD, excluding participants with average motion above \SI{0.2}{\milli\meter} reduced predictive accuracy by approximately \SI{`r round((1 - (acc_decrease_plot$data |> filter(dataset=="abcd", threshold==0.2))$acc) * 100, digits=2)`}{\percent} (\autoref{fig-cost}c). Applying a stricter \SI{0.1}{\milli\meter} cutoff excluded all but approximately \SI{`r round(((acc_decrease_plot$data |> filter(dataset=="abcd", threshold==0.1))$n / (acc_decrease_plot$data |> filter(dataset=="abcd", threshold==0.1))$N) * 100, digits=2)`}{\percent} of participants and reduced expected accuracy by \SI{`r round((1 - (acc_decrease_plot$data |> filter(dataset=="abcd", threshold==0.1))$acc) * 100, digits=2)`}{\percent} of its achievable maximum. In contrast, the UK Biobank exhibited only modest declines in performance (at \SI{0.1}{\milli\meter} threshold: \SI{`r round((1 - (acc_decrease_plot$data |> filter(dataset=="ukb", threshold==0.1))$acc) * 100, digits=2)`}{\percent} of maximum accuracy), because its remaining sample size remained above the inflection point of the performance curve. When exclusions push performance below this inflection point, expected predictive performance may decline sharply even when the analytic pipeline is otherwise optimal.
 
-Statistical Power for Brainwide Association Study (BWAS). FD Threshold determines rates of exclusion, as in \cref{fig-lost,fig-lost-filtered}. Power calculations assume a correlation of 0.1.
+::: {#fig-power}
+
+```{r power}
+#| fig-height: 5.5
+#| fig-width: 6
+
+fig_power
+```
+
+Statistical Power for Brainwide Association Study. FD Threshold determines rates of exclusion, as in @fig-lost and @fig-lost-filtered. Note that the lenient filtering strategy never excludes many participants and so the "none" and "lenient" lines are overplotted.
 
 :::
 
@@ -746,7 +752,50 @@ Model Performance (True and Predicted Correlation) Across Motion Groups. Using t
 
 :::
 
-Differences were observed in the relationship between training data volume and predictive performance across motion groups (@fig-performance). In particular, data from the high-motion group resulted in better maximum predictive performance (estimate and 95\% CI: $_{0.009}0.017_{0.03}$; DoF: 54; $t=4.3$; $p<0.001$), with performance measured by Fisher-transformed correlations achieved by phenotype prediction models trained with the largest total scan time considered. This result suggests that excluding high-motion participants may alter not only sample size, but also the apparent predictability of behavioral phenotypes, presumably because the excluded participants are not behaviorally random.
+```{r performancetest}
+targets::tar_load(performance)
+d_params <- performance |>
+  na.omit() |>
+  dplyr::group_nest(measure, low) |>
+  dplyr::mutate(
+    fit = purrr::map(
+      data,
+      ~ gslnls::gsl_nls(
+        r ~ k0 * sqrt(1 / (1 + k1 / nsub + k2 / (nsub * length))),
+        data = .x,
+        start = list(k0 = 0.5, k1 = 0.5, k2 = 0.5),
+        lower = c(k0 = 0, k1 = 0, k2 = 0),
+        algorithm = "subspace2D",
+      ) |>
+        broom::tidy()
+    )
+  ) |>
+  dplyr::select(-data) |>
+  tidyr::unnest(fit) |>
+  dplyr::select(-statistic, -p.value, -std.error) |>
+  tidyr::pivot_wider(names_from = term, values_from = estimate)
+
+performance_tested0 <- performance |>
+  na.omit() |>
+  dplyr::left_join(d_params, by = dplyr::join_by(measure, low)) |>
+  dplyr::mutate(
+    y_hat = model(k0, k1, k2, nsub, length = length),
+    nsub = factor(nsub),
+    total = total / 60
+  ) |>
+  filter(length == 58, nsub == 700) |>
+  select(measure, low, y_hat) |>
+  tidyr::pivot_wider(names_from = low, values_from = y_hat) |>
+  mutate(x = `High Motion` > `Low Motion`)
+
+performance_tested <- binom.test(
+  sum(performance_tested0$x),
+  nrow(performance_tested0)
+) |>
+  broom::tidy()
+```
+
+Differences were observed in the relationship between training data volume and predictive performance across motion groups (@fig-performance). In particular, data from the high-motion group resulted in better maximum predictive performance (binomial test for `r nrow(performance_tested0)` features: `r format_tidy_contrast(performance_tested)`), with performance measured by the correlations achieved by phenotype prediction models trained with the largest total scan time considered. This result suggests that excluding high-motion participants may alter not only sample size, but also the apparent predictability of behavioral phenotypes, presumably because the excluded participants are not behaviorally random.
 
 This difference in asymptotic predictive performance translated into substantially different optimal designs. For example, for Fluid Intelligence (PMAT), a study that aims to achieve 80\% of maximum predictive performance with low-motion participants would be optimized with approximately 25-minute scans from 3,651 individuals, whereas the optimal design with high-motion participants would require 35-minute scans from 9,128 individuals. For the high-motion subgroup, the framework produces a design that requires substantially more data because performance plateaus relatively slowly in this group. 
 
@@ -760,15 +809,17 @@ We observed widespread associations with motion (and therefore rates of exclusio
 
 This survey also points to a potential avenue for improving future datasets, which is to refine data collection protocols. We observed substantial differences in motion across the HCPD and ABCD datasets, although we do not know the source of these differences. Both datasets sample from pediatric cohorts, and controlling for the key characteristics considered here did not eliminate the dataset effects (age, sex, BMI, mental health factors), although additional confounding remains a possibility. One possibility is that aspects of the operating procedures contributed to the differences; although the ABCD followed several best practices for pediatric cohorts, such as the use of mock scanning and training [@gao_mock_scanner_2023; @casey_adolescent_2018], the ABCD scanning sessions are approximately twice as long as those in the HCPD (90-120 minutes vs 45 minutes), and, as shown here, motion tends to increase during a scanning session [see also @meissner_breaks_2020]. When considering the high proportions of participants that are regularly excluded from analyses of the ABCD [e.g., 40-60 \percent @marek_identifying_2019, @marek_reproducible_2022], this difference between motion in the ABCD and HCPD raises the possibility that there may be substantial value gained in further improving best-practices in neuroimaging experimental operations. 
 
-Beyond the overall magnitude of motion, the temporal structure of motion within scans has practical consequences that deserve attention. Across datasets, motion tended to increase throughout sessions. A drift pattern means that exclusion based on average framewise displacement will disproportionately penalize longer scans, since later frames contribute disproportionately to the mean. This leads to a situation in which studies that collect more data per participant may face higher exclusion rates, thereby counteracting the statistical benefits of longer acquisition [@ooi_longer_2025]. Similarly, the task-correlated motion observed across several datasets, visible as sharp spikes at button presses and elevated motion during specific task blocks, implies that exclusion rates will differ systematically between tasks even within the same participant and session. A participant retained for resting-state analysis may be excluded from task analysis, or vice versa, introducing inconsistencies in sample composition that are rarely reported. The between-dataset differences in motion among similarly aged adolescents (ABCD versus HCPD) further suggest that recruitment strategy and study design independently shape motion distributions, independent of participant characteristics. Note also that our displays of task-correlated motion, \cref{fig-all-by-time-hcpya,fig-all-by-time-hcpd,fig-all-by-time-hcpa,fig-all-by-time-spacetop,fig-all-by-time-ukb,fig-all-by-time-abcd}, show a conservative view of the effect, as no effort was made to account for variable task timing by aligning the motion timecourses across participants. These patterns collectively argue for exclusion criteria adapted to scan type, task structure, and acquisition length, rather than applied uniformly.
+For these analyses, we used the ABCD Community Collection [@feczko2021adolescent], which is released in parallel with the standard ABCD dataset. The standard ABCD dataset was observed to exhibit overall larger motion, exceeding \SI{0.5}{\milli\meter} in approximately 300 scans (@sec-abcc-vs-abcd). This amounts to less than \SI{1}{\percent} of the ABCD scans analyzed here, and so we suspect that the trends shown here will be largely consistent across derivative collections.
 
-Although there is substantial motion in these datasets, and although commonly applied thresholds entail exceptionally high rates of participant exclusion, this does not necessarily mean most of these datasets are unusable. This qualification applies most strongly to adult cohorts, where respiratory pseudo-motion is a major contributor to elevated framewise displacement. Consider motion related to respiration. In all datasets, we observed a distinct spectral peak in the motion parameters at respiratory frequencies (approximately \SI{0.3}{\hertz}), particularly in the phase-encoding direction. This is consistent with "pseudo-" or "apparent" motion--an artifact caused not by the head moving, but by the chest wall expanding and altering the B0 magnetic field.[^apparent] Motion that is only apparent may have a less substantial impact on data quality as compared with mechanical motion [@fair_correction_2020; @phạm_less_2023]. Consistent with earlier work [@phạm_less_2023], a data-driven method of censoring (DVARS) had a larger effect on functional connectivity estimates than censoring based on framewise displacement, suggesting that not all high-motion frames necessarily corrupt the timeseries (e.g., when motion is only apparent), and that some high-motion participants may still contribute usable data.
+Beyond the overall magnitude of motion, the temporal structure of motion within scans has practical consequences that deserve attention. Across datasets, motion tended to increase throughout sessions. A drift pattern means that exclusion based on average framewise displacement will disproportionately penalize longer scans, since later frames contribute disproportionately to the mean. This leads to a situation in which studies that collect more data per participant may face higher exclusion rates, thereby counteracting the statistical benefits of longer acquisition [@ooi_longer_2025]. Similarly, the task-correlated motion observed across several datasets, visible as sharp spikes at button presses and elevated motion during specific task blocks, implies that exclusion rates will differ systematically between tasks even within the same participant and session. A participant retained for resting-state analysis may be excluded from task analysis, or vice versa, introducing inconsistencies in sample composition that are rarely reported. Note also that our displays of task-correlated motion, \cref{fig-all-by-time-hcpya,fig-all-by-time-hcpd,fig-all-by-time-hcpa,fig-all-by-time-spacetop,fig-all-by-time-ukb,fig-all-by-time-abcd}, show a conservative view of the effect, as no effort was made to account for variable task timing by aligning the motion timecourses across participants. These patterns collectively argue for exclusion criteria adapted to scan type, task structure, and acquisition length, rather than applied uniformly.
 
-[^apparent]: In contrast to the report by @power_distinctions_2019, we observed this phenomenon in datasets that included children \citep[ABCD, HCPD, see also][]{fair_correction_2020}. It has been hypothesized that children may exhibit less pseudomotion due to their smaller chest cavities. However, pseudomotion is harder to identify in the presence of real motion, which is typically high in children. That is, we speculate that @power_distinctions_2019 may have observed minimal pseudo-motion in their younger cohort because of that cohort's propensity to move frequently, and their relatively small sample size (<100) did not include enough low-motion children to uncover pseudo-motion. 
+Although there is substantial motion in these datasets, and although commonly applied thresholds entail exceptionally high rates of participant exclusion, this does not necessarily mean most of these datasets are unusable. This qualification applies most strongly to adult cohorts, where respiratory pseudo-motion is a major contributor to framewise displacement. In all datasets, we observed a distinct spectral peak in the motion parameters at respiratory frequencies (approximately \SI{0.3}{\hertz}), particularly in the phase-encoding direction. This is consistent with "pseudo-" or "apparent" motion--an artifact caused not by the head moving, but by the chest wall expanding and altering the B0 magnetic field.[^apparent] Motion that is only apparent may have a less substantial impact on data quality as compared with mechanical motion [@fair_correction_2020; @phạm_less_2023]. Consistent with earlier work [@phạm_less_2023], a data-driven method of censoring (DVARS) had a larger effect on functional connectivity estimates than censoring based on framewise displacement, suggesting that not all high-motion frames necessarily corrupt the timeseries (e.g., when motion is only apparent), and that some high-motion participants may still contribute usable data.
 
-Overall, the relative risk of bias from including versus excluding high-motion participants remains unresolved. Consider the difference in predictive performance between high- versus low-motion participants; high-motion participants tended to yield higher predictive performance (@fig-performance). This pattern is not surprising, as head motion is not purely random noise but is systematically associated with behavioral phenotypes, providing learnable structure that prediction models can exploit. For example, average motion has a rank correlation of $-0.17$ with Card Sorting performance (Card Sort) and $-0.12$ with the area under the delay discounting curve for evaluation of \$40k (DDisc AUC 40k). Importantly, this result does not indicate superior data quality in high-motion participants. Rather, it is consistent with exclusion of high-motion individuals removing a non-random, behaviorally distinct subgroup. 
+[^apparent]: In contrast to the report by @power_distinctions_2019, we observed this phenomenon in datasets that included children [ABCD, HCPD, see also @fair_correction_2020]. It has been hypothesized that children may exhibit less pseudomotion due to their smaller chest cavities. However, pseudomotion is harder to identify in the presence of real motion, which is typically high in children. That is, we speculate that @power_distinctions_2019 may have observed minimal pseudo-motion in their younger cohort because of that cohort's propensity to move frequently, and their relatively small sample size (<100) did not include enough low-motion children to uncover pseudo-motion. 
 
-Finally, it is important to contextualize the high exclusion rates reported here by noting that strict FD thresholds do not account for the efficacy of modern denoising techniques. For example, the UK Biobank pipeline utilizes ICA-FIX, which automatically identifies and removes noise components from the data [@griffanti_ica_2014]. This removal allows ICA-FIX to recover usable signal from scans that might otherwise be discarded based solely on raw motion metrics. This suggests that although \SI{80}{\percent} of UKB participants might fail a "strict" motion criterion, a substantially larger fraction may still contribute valid data after aggressive denoising. Indeed, some evidence suggests that even high-motion frames substantially improve functional connectivity estimates [@mejia2026excessive]. At present, however, the usable limit of data heavily influenced by motion remains difficult to quantify. Consider also that the HCPYA dataset, one of the field's most widely used resources, was recently re-released with a new denoising procedure that augments ICA-FIX with a temporal ICA-based approach [@glasser_using_2018; @yang_automating_2024], underscoring that ICA-FIX alone does not remove all sources of structured noise. Additional research is needed to establish how much motion can be tolerated under contemporary preprocessing pipelines and how such denoising changes downstream analyses.
+Overall, the relative risk of bias from including versus excluding high-motion participants remains unresolved. Consider the difference in predictive performance between high- versus low-motion participants; high-motion participants tended to yield higher predictive performance (@fig-performance). This pattern is not surprising, as head motion is not purely random noise but is systematically associated with behavioral phenotypes, providing learnable structure that prediction models can exploit. For example, average motion has a rank correlation of $-0.17$ with Card Sorting performance (Card Sort) and $-0.12$ with the area under the delay discounting curve for evaluation of \$40k (DDisc AUC 40k). Importantly, this result does not indicate superior data quality in high-motion participants. Rather, it is consistent with exclusion of high-motion individuals removing a non-random, behaviorally distinct subgroup.
+
+Finally, it is important to contextualize the high exclusion rates reported here by noting that strict FD thresholds do not account for the efficacy of modern denoising techniques. For example, the UK Biobank pipeline utilizes ICA-FIX, which automatically identifies and removes noise components from the data [@griffanti_ica_2014]. This removal allows ICA-FIX to recover usable signal from scans that might otherwise be discarded based solely on raw motion metrics, performing a sort of "soft-censoring" on the data. This suggests that although \SI{80}{\percent} of UKB participants might fail a "strict" motion criterion, a substantially larger fraction may still contribute valid data after aggressive denoising. Indeed, some evidence suggests that even high-motion frames substantially improve functional connectivity estimates [@mejia2026excessive]. At present, however, the usable limit of data heavily influenced by motion remains difficult to quantify. Consider also that the HCPYA dataset, one of the field's most widely used resources, was recently re-released with a new denoising procedure that augments ICA-FIX with a temporal ICA-based approach [@glasser_using_2018; @yang_automating_2024], underscoring that ICA-FIX alone does not remove all sources of structured noise. Additional research is needed to establish how much motion can be tolerated under contemporary preprocessing pipelines and how such denoising affects downstream analyses.
 
 ## Recommendations
 
@@ -820,21 +871,116 @@ Data were provided by the Human Connectome Project, WU-Minn Consortium (Principa
 
 # Supplementary Materials {#sec-supplements}
 
+## Motion in ABCD vs ABCC {#sec-abcc-vs-abcd}
+
+::: {#fig-abcc-vs-abcd}
+
+```{r abcc-vs-abcd}
+targets::tar_read(fig_abcc_abcd)
+```
+
+Comparison of Motion in Resting-State Scans Across ABCC and ABCD. Each point corresponds to a participant. The blue ribbons mark average differences, and the red ribbons are the limits of agreement (approximately 2 standard deviations of the difference). Ribbon widths indicate \SI{95}{\percent} confidence intervals for the estimates. Motion in the ABCD scans were pulled from the `mr_y_qc__mot__rsfmri__mot_mean` variable (average framewise displacement in resting state fMRI).
+
+:::
+
+\newpage
+
 ## Motion Spectral Frequencies {#sec-fixed-frequency-plots}
 
+In all plots below, only the first run of a task is included per session. Spectrums are calculated as in @fair_correction_2020. Briefly, power spectral densities, $p$, were estimated after detrending with an adaptive, multitaper filter (NFFT=512, NW=8), scaled by $10\log(p)$, zscored, linearized, and truncated at \SI{0.1}{\percent} and \SI{96}{\percent}. For a detailed description of the procedure see @fair_correction_2020.
 
 ::: {#fig-hcpa-spectrum}
 
 ```{r hcpa-spectrum}
-# targets::tar_read()
+#| fig-height: 7
+targets::tar_read(fig_hcpa_spectrum)
 ```
 
+Motion Spectrum in HCPA.
+
 :::
+
+\newpage
+
+::: {#fig-hcpd-spectrum}
+
+```{r hcpd-spectrum}
+#| fig-height: 7
+targets::tar_read(fig_hcpd_spectrum)
+```
+
+Motion Spectrum in HCPD.
+
+:::
+
+\newpage
+
+::: {#fig-hcpya-spectrum}
+
+```{r hcpya-spectrum}
+#| fig-height: 7
+targets::tar_read(fig_hcpya_spectrum)
+```
+
+Motion Spectrum in HCPYA.
+
+:::
+
+\newpage
+
+::: {#fig-spacetop-spectrum}
+
+```{r spacetop-spectrum}
+#| fig-height: 7
+targets::tar_read(fig_spacetop_spectrum)
+```
+
+Motion Spectrum in SpaceTop.
+
+:::
+
+\newpage
+
+::: {#fig-ukb-spectrum}
+
+```{r ukb-spectrum}
+#| fig-height: 7
+targets::tar_read(fig_ukb_spectrum)
+```
+
+Motion Spectrum in UKB (Repeat Session Only).
+
+:::
+
+\newpage
+
+::: {#fig-abcd-spectrum}
+
+```{r abcd-spectrum}
+#| fig-height: 7
+targets::tar_load(c(
+  fig_abcd_spectrum_00,
+  fig_abcd_spectrum_02,
+  fig_abcd_spectrum_04,
+  fig_abcd_spectrum_06
+))
+fig_abcd_spectrum_00 +
+  fig_abcd_spectrum_02 +
+  fig_abcd_spectrum_04 +
+  fig_abcd_spectrum_06 +
+  patchwork::plot_layout(guides = "collect")
+```
+
+Motion Spectrum in ABCD.
+
+:::
+
+\newpage
 
 ## Model Fit {#sec-fits}
 \tiny
 
-::: {#tbl-fits}
+::: {#tbl-fits .small-caption}
 
 ```{r fits}
 compare_datasets_fit |>
@@ -844,13 +990,13 @@ compare_datasets_fit |>
   insight::export_table(format = "md")
 ```
 
-Linear Mixed Effects Model Summary of Average Motion in Resting State Scans for Comparison of HBCD and ABCD. The model formula was `fd ~ external + internal + attention + age * bmi * sex + manufacturer + manufacturer:age + (1 | sub)`, where `fd` is runwise average framewise displacement, `external`, `internal`, and `attention` are binary factors indicating symptoms, and `manufacturer` is a factor indicating the manufacturer of the scanner used for scanning. Manufacturer was included because the FIRMM software was only available on the scanners from some manufacturers [@casey_adolescent_2018]. All HCPD scans were collected on a Siemens scanner, and so, for convenience of constructing a contrast for dataset, the manufacturer in the HCPD dataset was set not the Siemens but instead Siemens-HCD.
+\tiny Linear Mixed Effects Model Summary of Average Motion in Resting State Scans for Comparison of HCPD and ABCD. The model formula was `fd ~ external + internal + attention + age * bmi * sex + manufacturer + manufacturer:age + (1 | sub)`, where `fd` is runwise average framewise displacement (in ABCD and HCPD only), `external`, `internal`, and `attention` are binary factors indicating symptoms, and `manufacturer` is a factor indicating the manufacturer of the scanner used for scanning. Manufacturer was included to account for differences in the acquisition parameters [@hagler_image_2019]. All HCPD scans were collected on a Siemens scanner, and so, for convenience of constructing a contrast for dataset, the manufacturer in the HCPD dataset was set not the Siemens but instead Siemens-HCD. The model was fit using `glmmTMB` [@mcgillycuddy2025parsimoniously].
 
 :::
 
 \newpage
 
-::: {#tbl-fits-rest}
+::: {#tbl-fits-rest .small-caption}
 
 ```{r fits-rest}
 rest_fit |>
@@ -860,6 +1006,6 @@ rest_fit |>
   insight::export_table(format = "md")
 ```
 
-Linear Mixed Effects Model Summary of Average Motion in Resting State Scans. The model formula was `fd ~  age * bmi * sex + dataset + dataset:age + (1 | sub)`, where `fd` is runwise average framewise displacement.
+\tiny Linear Mixed Effects Model Summary of Average Motion in Resting State Scans. The model formula was `fd ~  age * bmi * sex + dataset + dataset:age + (1 | sub)`, where `fd` is runwise average framewise displacement (all datasets included). The model was fit using `glmmTMB` [@mcgillycuddy2025parsimoniously].
 
 :::

@@ -34,7 +34,7 @@ factorize_ses <- function(.d) {
     dplyr::mutate(
       ses = factor(
         ses,
-        levels = c("1", "2", "3", "4", "Baseline", "Year2", "Year4"),
+        levels = c("1", "2", "3", "4", "Baseline", "Year2", "Year4", "Year6"),
         ordered = TRUE
       )
     )
@@ -107,36 +107,6 @@ set_pedrun <- function(.data) {
       ped.run = interaction(ped2, run)
     ) |>
     dplyr::select(-ped2)
-}
-
-get_by_run <- function(hcpya, hcpa, hcpd, ukb, abcd) {
-  purrr::map(
-    list(
-      hcpya = dplyr::mutate(hcpya, ses = "1"),
-      hcpa = hcpa,
-      hcpd = hcpd,
-      ukb = ukb,
-      abcd = abcd
-    ),
-    summarise_by_run
-  ) |>
-    dplyr::bind_rows(.id = "dataset") |>
-    dplyr::mutate(
-      ses = factor(
-        ses,
-        levels = c(
-          "1",
-          "2",
-          "3",
-          "4",
-          "baselineYear1Arm1",
-          "2YearFollowUpYArm1",
-          "4YearFollowUpYArm1"
-        ),
-        ordered = TRUE
-      )
-    ) |>
-    set_pedrun()
 }
 
 .summarize_by_prop <- function(.data, threshold) {
@@ -462,11 +432,13 @@ get_orig_counts <- function(
   hcpd_source,
   abcd_source
 ) {
+  abcd_entities <- get_abcd_entities(abcd_source) |>
+    dplyr::distinct(sub) |>
+    dplyr::mutate(dataset = "abcd")
   purrr::map(
     list(
       ukb = ukb_source,
       spacetop = spacetop_source,
-      abcd = abcd_source,
       hcpya = hcpya_source,
       hcpa = hcpa_source,
       hcpd = hcpd_source
@@ -474,20 +446,20 @@ get_orig_counts <- function(
     read_distinct_collect
   ) |>
     dplyr::bind_rows(.id = "dataset") |>
+    dplyr::bind_rows(abcd_entities) |>
     dplyr::count(dataset)
 }
 
-plot_spectrum <- function(spectrums, ds) {
-  d <- spectrums |>
-    dplyr::filter(dataset == ds) |>
-    dplyr::mutate(avg = factor(avg, ordered = TRUE))
+plot_spectrum <- function(spectrums) {
+  ds <- unique(spectrums$dataset)
+  d <- spectrums |> dplyr::mutate(avg = factor(avg, ordered = TRUE))
 
   if (ds %in% c("hcpd", "hcpa")) {
     d |>
       ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
       ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
       ggplot2::scale_fill_viridis_c(option = "turbo") +
-      ggplot2::facet_grid(task + scan ~ param) +
+      ggplot2::facet_grid(task + scan ~ param, scales = "free_y") +
       ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
       ggplot2::theme(
         axis.ticks.y = ggplot2::element_blank(),
@@ -499,19 +471,19 @@ plot_spectrum <- function(spectrums, ds) {
       ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
       ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
       ggplot2::scale_fill_viridis_c(option = "turbo") +
-      ggplot2::facet_grid(task + scan ~ param) +
+      ggplot2::facet_grid(task + scan ~ param, scales = "free_y") +
       ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
       ggplot2::theme(
         axis.ticks.y = ggplot2::element_blank(),
         axis.text.y = ggplot2::element_blank()
       )
-  } else if (ds %in% c("spacetop")) {
+  } else if (ds %in% c("spacetop", "ukb", "abcd")) {
     d |>
       dplyr::filter(scan == 1) |>
       ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
       ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
       ggplot2::scale_fill_viridis_c(option = "turbo") +
-      ggplot2::facet_grid(task + ses ~ param, ) +
+      ggplot2::facet_grid(task + ses ~ param, scales = "free_y") +
       ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
       ggplot2::theme(
         axis.ticks.y = ggplot2::element_blank(),
@@ -581,20 +553,18 @@ format_icc <- function(row) {
 
 
 get_compare_datasets_fit <- function(by_run, demographics, bpm_src) {
-  bpm <- readr::read_csv(bpm_src) |>
+  bpm <- duckplyr::read_parquet_duckdb(bpm_src) |>
     dplyr::select(
-      sub = src_subject_id,
-      ses = eventname,
-      bpm_t_scr_external_t,
-      bpm_t_scr_internal_t,
-      bpm_t_scr_attention_t
+      sub = participant_id,
+      ses = session_id,
+      mh_t_bpm__ext_tscore,
+      mh_t_bpm__int_tscore,
+      mh_t_bpm__attn_tscore
     ) |>
-    dplyr::filter(
-      !(ses %in% c("1_year_follow_up_y_arm_1", "3_year_follow_up_y_arm_1"))
-    ) |>
-    dplyr::mutate(sub = stringr::str_remove(sub, "_")) |>
+    dplyr::filter(ses %in% c("ses-00A", "ses-02A", "ses-04A", "ses-06A")) |>
+    dplyr::mutate(sub = stringr::str_remove(sub, "sub-")) |>
     convert_abcd_ses() |>
-    tidyr::pivot_longer(bpm_t_scr_external_t:bpm_t_scr_attention_t) |>
+    tidyr::pivot_longer(mh_t_bpm__ext_tscore:mh_t_bpm__attn_tscore) |>
     na.omit() |>
     dplyr::summarise(value = mean(value), .by = c(sub, name)) |>
     tidyr::pivot_wider()
@@ -618,13 +588,13 @@ get_compare_datasets_fit <- function(by_run, demographics, bpm_src) {
     )) |>
     dplyr::left_join(bpm) |>
     dplyr::mutate(dplyr::across(
-      tidyselect::contains("bpm_t_scr"),
+      tidyselect::contains("mh_t_bpm"),
       ~ dplyr::if_else(is.na(.x), 0, .x)
     )) |>
     dplyr::mutate(
-      external = bpm_t_scr_external_t > 65,
-      internal = bpm_t_scr_internal_t > 65,
-      attention = bpm_t_scr_attention_t > 65,
+      external = mh_t_bpm__ext_tscore > 65,
+      internal = mh_t_bpm__int_tscore > 65,
+      attention = mh_t_bpm__attn_tscore > 65,
       deviceserialnumber = dplyr::if_else(
         is.na(deviceserialnumber),
         "hcpd",
@@ -638,7 +608,7 @@ get_compare_datasets_fit <- function(by_run, demographics, bpm_src) {
       ses = factor(ses, ordered = FALSE)
     )
 
-  lme4::lmer(
+  glmmTMB::glmmTMB(
     loc ~ external +
       internal +
       attention +
@@ -650,7 +620,7 @@ get_compare_datasets_fit <- function(by_run, demographics, bpm_src) {
   )
 }
 
-format_tidy_contrast <- function(row) {
+format_tidy_contrast <- function(row, digits = 2) {
   if (row$p.value < 0.001) {
     p <- "p < 0.001"
   } else if (row$p.value < 0.01) {
@@ -661,7 +631,7 @@ format_tidy_contrast <- function(row) {
     p <- "p > 0.05"
   }
   str <- glue::glue(
-    "$_{[round(row$conf.low, 2)]}{[round(row$estimate, 2)]}_{[round(row$conf.high, 2)]}$, $[p]$",
+    "$_{[round(row$conf.low, digits)]}{[round(row$estimate, digits)]}_{[round(row$conf.high, digits)]}$, $[p]$",
     .open = "[",
     .close = "]"
   )
@@ -687,4 +657,37 @@ get_rest_fit <- function(by_run, demographics) {
     loc ~ age * bmi * sex + dataset + dataset:age + (1 | sub),
     data = d
   )
+}
+
+plot_abcc_abcd <- function(abcd, mr_y_qc__mot) {
+  abcc <- abcd |>
+    dplyr::filter(task == "rest") |>
+    dplyr::summarise(
+      framewise_displacement = mean(framewise_displacement),
+      .by = c(sub, ses)
+    )
+
+  abcd0 <- duckplyr::read_parquet_duckdb(mr_y_qc__mot, prudence = "lavish") |>
+    dplyr::rename(sub = participant_id, ses = session_id) |>
+    dplyr::mutate(sub = stringr::str_remove(sub, "sub-")) |>
+    dplyr::select(
+      sub,
+      framewise_displacement = mr_y_qc__mot__rsfmri__mot_mean,
+      ses
+    ) |>
+    dplyr::collect() |>
+    convert_abcd_ses()
+
+  dplyr::bind_rows(list(abcc = abcc, abcd = abcd0), .id = "dataset") |>
+    tidyr::pivot_wider(
+      names_from = dataset,
+      values_from = framewise_displacement
+    ) |>
+    dplyr::mutate(.diff = abcd - abcc, .avg = (abcd + abcc) / 2) |>
+    ggplot2::ggplot(ggplot2::aes(x = .avg, y = .diff)) +
+    ggplot2::facet_wrap(~ses) +
+    agree::geom_ba() +
+    scattermore::geom_scattermore(pointsize = 2, alpha = 0.5) +
+    ggplot2::ylab("Motion Difference: ABCD - ABCC (mm)") +
+    ggplot2::xlab("Motion Average: (ABCD + ABCC)/2 (mm)")
 }

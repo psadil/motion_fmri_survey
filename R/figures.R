@@ -1094,7 +1094,13 @@ make_fig_performance <- function(d, key_measures) {
 }
 
 make_fig_power <- function(by_run, lost) {
-  by_run |>
+  background <- tidyr::crossing(
+    r = seq(0.01, 0.2, length.out = 200),
+    n = exp(seq(log(100), log(50000), length.out = 1000))
+  ) |>
+    dplyr::mutate(p = pwr::pwr.r.test(n = n, r = r)$power)
+
+  d <- by_run |>
     dplyr::filter(scan == 1, task == "rest") |>
     dplyr::count(dataset, ses, task, scan, filtered) |>
     dplyr::left_join(lost) |>
@@ -1104,22 +1110,33 @@ make_fig_power <- function(by_run, lost) {
     tidyr::pivot_wider(names_from = type, values_from = nn) |>
     tidyr::pivot_longer(none:strict, values_to = "n") |>
     dplyr::mutate(
-      p = pwr::pwr.r.test(n = n, r = 0.1)$power,
+      ses = dplyr::case_when(
+        dataset == "spacetop" ~ " ",
+        stringr::str_detect(dataset, "hcp") ~ "",
+        TRUE ~ as.character(ses)
+      ),
       dataset = stringr::str_to_upper(dataset),
-      ses = stringr::str_replace(ses, "^[[:digit:]]+", " "),
-      name = factor(name, levels = c("none", "lenient", "strict")),
-      dataset = interaction(dataset, ses, drop = TRUE)
-    ) |>
-    ggplot2::ggplot(ggplot2::aes(x = name, y = p)) +
-    ggplot2::geom_col(ggplot2::aes(fill = Filtered), position = "dodge") +
-    ggplot2::facet_wrap(~ dataset + ses, nrow = 2) +
-    ggplot2::scale_fill_viridis_d(option = "turbo") +
-    ggplot2::ylab("Statistical Power") +
-    ggplot2::xlab("FD Threshold") +
-    ggplot2::theme(
-      legend.position = "inside",
-      legend.position.inside = c(0.9, 0.1)
+      name = factor(name, levels = c("none", "lenient", "strict"))
     )
+
+  d |>
+    ggplot2::ggplot() +
+    ggplot2::geom_raster(
+      ggplot2::aes(fill = p, x = n, y = r),
+      data = background
+    ) +
+    ggplot2::geom_vline(
+      ggplot2::aes(xintercept = n, linetype = name, color = Filtered),
+      data = d
+    ) +
+    ggplot2::facet_wrap(~ dataset + ses, nrow = 3) +
+    ggplot2::scale_fill_viridis_c(
+      name = "Statistical\nPower",
+      option = "turbo"
+    ) +
+    ggplot2::scale_x_continuous(name = "Dataset Size", transform = "log10") +
+    ggplot2::ylab("Effect Size (Correlation)") +
+    ggplot2::labs(linetype = "Exclusion\nStrategy")
 }
 
 make_fig_hcp_psych <- function(by_run) {

@@ -23,7 +23,8 @@ def get_peaks(d: pl.DataFrame, tr: float, cols: list[str]) -> pl.DataFrame:
                     NFFT=512,
                 )
                 peaks.append(
-                    group.select(cols)
+                    group
+                    .select(cols)
                     .unique()
                     .with_columns(key=1, param=pl.lit(param))
                     .join(pl.DataFrame({"freq": x, "pxx": y, "key": 1}), on="key")
@@ -38,10 +39,12 @@ root = Path("derivatives") / "premotion"
 derivatives = Path("derivatives") / "motion"
 
 (
-    pl.scan_parquet(root / "dataset=hcpa")
+    pl
+    .scan_parquet(root / "dataset=hcpa")
     .with_columns(
         ped=pl.col("src").str.extract(r"(AP|PA)"),
-        task=pl.col("src")
+        task=pl
+        .col("src")
         .str.extract(r"(REST1|REST2|CARIT|FACENAME|VISMOTOR)")
         .str.to_lowercase(),
         sub=pl.col("sub").cast(pl.Utf8),
@@ -55,10 +58,12 @@ derivatives = Path("derivatives") / "motion"
 
 
 (
-    pl.scan_parquet(root / "dataset=hcpd")
+    pl
+    .scan_parquet(root / "dataset=hcpd")
     .with_columns(
         ped=pl.col("src").str.extract(r"(AP|PA)"),
-        task=pl.col("src")
+        task=pl
+        .col("src")
         .str.extract(
             r"(REST1a|REST1b|REST1|REST2a|REST2b|REST2|CARIT|EMOTION|GUESSING)"
         )
@@ -75,11 +80,13 @@ derivatives = Path("derivatives") / "motion"
 
 
 (
-    pl.scan_parquet(root / "dataset=hcpya")
+    pl
+    .scan_parquet(root / "dataset=hcpya")
     .collect()
     .with_columns(
         ped=pl.col("src").str.extract(r"(LR|RL)"),
-        task=pl.col("src")
+        task=pl
+        .col("src")
         .str.extract(
             r"(REST1|REST2|RELATIONAL|EMOTION|MOTOR|GAMBLING|LANGUAGE|SOCIAL|WM)"
         )
@@ -97,7 +104,8 @@ derivatives = Path("derivatives") / "motion"
 
 # some abcd scans are just way too short
 abcd_too_short = (
-    pl.scan_parquet(root / "dataset=abcd")
+    pl
+    .scan_parquet(root / "dataset=abcd")
     .with_columns(
         task=pl.col("src").str.extract(r"(rest|mid|sst|nback)"),
         run=pl.col("src").str.extract(r"run-(\d+)"),
@@ -109,7 +117,8 @@ abcd_too_short = (
 )
 
 (
-    pl.scan_parquet(root / "dataset=abcd")
+    pl
+    .scan_parquet(root / "dataset=abcd")
     .with_columns(
         task=pl.col("src").str.extract(r"(rest|mid|sst|nback)"),
         run=pl.col("src").str.extract(r"run-(\d+)"),
@@ -122,9 +131,11 @@ abcd_too_short = (
 )
 
 (
-    pl.scan_parquet(root / "dataset=ukb")
+    pl
+    .scan_parquet(root / "dataset=ukb")
     .with_columns(
-        task=pl.when(pl.col("src") == 20227)
+        task=pl
+        .when(pl.col("src") == 20227)
         .then(pl.lit("rest"))
         .otherwise(pl.lit("faces/shapes")),
         sub=pl.col("sub").cast(pl.Utf8),
@@ -148,7 +159,8 @@ for subdir in Path("/dcs07/smart/data/SpatialTopology/ds005256-fmriprep").glob("
             task = re.findall(r"(?<=task-)[a-zA-Z]+", tsv.name)
             run = re.findall(r"(?<=run-)\d+", tsv.name)
             tsvs.append(
-                pl.read_csv(tsv, separator="\t", null_values="n/a")
+                pl
+                .read_csv(tsv, separator="\t", null_values="n/a")
                 .select(pl.selectors.starts_with("rot", "trans", "rmsd"))
                 .drop(
                     pl.selectors.ends_with("power2"),
@@ -165,7 +177,8 @@ for subdir in Path("/dcs07/smart/data/SpatialTopology/ds005256-fmriprep").glob("
 
 tmp: pl.DataFrame = pl.concat(tsvs)
 (
-    tmp.pipe(get_peaks, tr=0.46, cols=["sub", "ses", "task", "run"])
+    tmp
+    .pipe(get_peaks, tr=0.46, cols=["sub", "ses", "task", "run"])
     .fill_null(0)
     .write_parquet(derivatives / "spacetop_spectrum.parquet")
 )
