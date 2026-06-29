@@ -452,44 +452,20 @@ get_orig_counts <- function(
 
 plot_spectrum <- function(spectrums) {
   ds <- unique(spectrums$dataset)
-  d <- spectrums |> dplyr::mutate(avg = factor(avg, ordered = TRUE))
+  d <- spectrums |>
+    dplyr::mutate(avg = factor(avg, ordered = TRUE)) |>
+    dplyr::select(-ses, -scan, -dataset, -sub)
 
-  if (ds %in% c("hcpd", "hcpa")) {
-    d |>
-      ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
-      ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
-      ggplot2::scale_fill_viridis_c(option = "turbo") +
-      ggplot2::facet_grid(task + scan ~ param, scales = "free_y") +
-      ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
-      ggplot2::theme(
-        axis.ticks.y = ggplot2::element_blank(),
-        axis.text.y = ggplot2::element_blank()
-      )
-  } else if (ds %in% c("hcpya")) {
-    d |>
-      dplyr::filter(scan == 1) |>
-      ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
-      ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
-      ggplot2::scale_fill_viridis_c(option = "turbo") +
-      ggplot2::facet_grid(task + scan ~ param, scales = "free_y") +
-      ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
-      ggplot2::theme(
-        axis.ticks.y = ggplot2::element_blank(),
-        axis.text.y = ggplot2::element_blank()
-      )
-  } else if (ds %in% c("spacetop", "ukb", "abcd")) {
-    d |>
-      dplyr::filter(scan == 1) |>
-      ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
-      ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
-      ggplot2::scale_fill_viridis_c(option = "turbo") +
-      ggplot2::facet_grid(task + ses ~ param, scales = "free_y") +
-      ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
-      ggplot2::theme(
-        axis.ticks.y = ggplot2::element_blank(),
-        axis.text.y = ggplot2::element_blank()
-      )
-  }
+  d |>
+    ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
+    ggplot2::facet_grid(task ~ param, scales = "free_y") +
+    ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
+    ggplot2::scale_fill_viridis_c(option = "turbo") +
+    ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+    ggplot2::theme(
+      axis.ticks.y = ggplot2::element_blank(),
+      axis.text.y = ggplot2::element_blank()
+    )
 }
 
 get_icc <- function(by_run) {
@@ -620,7 +596,7 @@ get_compare_datasets_fit <- function(by_run, demographics, bpm_src) {
   )
 }
 
-format_tidy_contrast <- function(row, digits = 2) {
+format_tidy_contrast <- function(row, digits = 3) {
   if (row$p.value < 0.001) {
     p <- "p < 0.001"
   } else if (row$p.value < 0.01) {

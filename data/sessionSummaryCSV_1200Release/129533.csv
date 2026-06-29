@@ -1,0 +1,16 @@
+Session Day,Acquisition Time,Session,Scan Number,Scan Type,Scan Description,Shim Group,BiasField group,SE_FieldMap group,GE_FieldMap group,PE Direction,Readout Direction,E-Prime Script,Scan Order,Scan Complete,Percent Complete,Percent Pair Complete
+Day 1,16:27:30,2,201,Bias_Receive,BIAS_BC,A,2,,,,,,,,,
+Day 1,16:27:56,2,202,Bias_Receive,BIAS_32CH,A,2,,,,,,,,,
+Day 1,16:29:06,2,203,FieldMap_SE_EPI,SpinEchoFieldMap_RL,C,2,1,,'+x,,,,,,
+Day 1,16:29:38,2,204,FieldMap_SE_EPI,SpinEchoFieldMap_LR,C,2,1,,'-x,,,,,,
+Day 1,16:30:35,2,205,rfMRI_SBRef,rfMRI_REST1_RL_SBRef,C,2,1,,'+x,,,,,,
+Day 1,16:30:35,2,206,rfMRI,rfMRI_REST1_RL,C,2,1,,'+x,,,1,Y,100.0,100.0
+Day 1,16:46:29,2,207,rfMRI_SBRef,rfMRI_REST1_LR_SBRef,C,2,1,,'-x,,,,,,
+Day 1,16:46:29,2,208,rfMRI,rfMRI_REST1_LR,C,2,1,,'-x,,,2,Y,100.0,100.0
+Day 2,09:55:37,3,301,Bias_Receive,BIAS_BC,A,3,,,,,,,,,
+Day 2,09:56:03,3,302,Bias_Receive,BIAS_32CH,A,3,,,,,,,,,
+Day 2,09:57:40,3,303,T1w,T1w_MPR1,D,3,,2,,'+z,,,,,
+Day 2,10:05:58,3,304,T2w,T2w_SPC1,D,3,,2,,'+z,,,,,
+Day 2,10:15:08,3,305,FieldMap,FieldMap_Magnitude,D,3,,2,,,,,,,
+Day 2,10:15:09,3,306,FieldMap,FieldMap_Phase,D,3,,2,,,,,,,
+Day 2,10:17:25,3,307,Bias_Transmit,AFI,D,3,,,,,,,,,

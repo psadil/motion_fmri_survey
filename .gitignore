@@ -10,6 +10,8 @@ data/events/derivatives/*
 data/events/*tsv
 !data/ukb-schaefer/*py
 !data/ukb-schaefer/run*
+!data/sessionSummaryCSV_1200Release/
+!data/participants.tsv
 /.quarto/
 index_*
 Untitled*

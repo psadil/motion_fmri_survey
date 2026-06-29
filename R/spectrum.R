@@ -91,35 +91,31 @@ get_hcpd_spectrum <- function(src, hcpd, by_run) {
 }
 
 get_hcpya_spectrum <- function(src, hcpya, by_run) {
+  rest_exclude <- duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::filter(ped == "RL") |>
+    dplyr::count(task, freq) |>
+    dplyr::filter(n < 10) |>
+    dplyr::mutate(task = "rest")
+
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
-    add_run() |>
+    dplyr::filter(ped == "RL") |>
     dplyr::mutate(
-      task = stringr::str_to_lower(task),
-      run = dplyr::recode_values(
-        task,
-        "rest1" ~ 1L,
-        "rest2" ~ 2L,
-        default = run
-      ),
       task = dplyr::case_when(
-        task == "rest1a" ~ "resta",
-        task == "rest1b" ~ "restb",
-        task == "rest2a" ~ "resta",
-        task == "rest2b" ~ "restb",
         stringr::str_detect(task, "rest") ~ "rest",
         .default = task
       )
     ) |>
     do_casting() |>
-    dplyr::inner_join(
-      dplyr::distinct(hcpya, sub, task, run, ped, ses, scan),
-      by = dplyr::join_by(sub, ses, task, ped, run)
+    dplyr::semi_join(
+      dplyr::distinct(hcpya, sub, task, ped),
+      by = dplyr::join_by(sub, task, ped)
     ) |>
-    dplyr::select(-ped, -run) |>
-    dplyr::filter(scan == 1) |>
-    rescale(param, sub, ses, task, scan) |>
+    dplyr::anti_join(rest_exclude, by = dplyr::join_by(task, freq)) |>
+    dplyr::select(-ped) |>
+    rescale(param, sub, ses, task) |>
     dplyr::mutate(dataset = "hcpya") |>
-    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
+    dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset)) |>
+    dplyr::mutate(scan = 1)
 }
 
 get_abcd_spectrum <- function(src, by_run) {
@@ -148,15 +144,50 @@ get_abcd_spectrum <- function(src, by_run) {
 }
 
 get_spacetop_spectrum <- function(src, spacetop, by_run) {
+  freqs <- duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::mutate(scan = as.integer(run)) |>
+    dplyr::filter(scan == 1) |>
+    dplyr::count(task, freq)
+
+  narratives <- freqs |>
+    dplyr::filter(task == "narratives") |>
+    dplyr::filter(n == 624)
+
+  fractional <- freqs |>
+    dplyr::filter(task == "fractional") |>
+    dplyr::filter(n == 588)
+
+  alignvideo <- freqs |>
+    dplyr::filter(task == "alignvideo") |>
+    dplyr::filter(n == 690)
+
+  shortvideo <- freqs |>
+    dplyr::filter(task == "shortvideo") |>
+    dplyr::filter(n == 456)
+
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::filter(freq > 0) |>
     dplyr::mutate(ses = as.integer(ses), scan = run) |> # need to strip leading 0 before do_casting
     do_casting() |>
+    dplyr::filter(scan == 1) |>
+    dplyr::semi_join(
+      dplyr::bind_rows(
+        dplyr::filter(
+          freqs,
+          !(task %in% c("alignvideo", "shortvideo", "fractional", "narratives"))
+        ),
+        alignvideo,
+        shortvideo,
+        fractional,
+        narratives
+      ),
+      by = dplyr::join_by(task, freq)
+    ) |>
     dplyr::inner_join(
       dplyr::distinct(spacetop, sub, task, run, ses, scan),
       by = dplyr::join_by(sub, ses, task, run, scan)
     ) |>
     dplyr::select(-run) |>
-    dplyr::filter(scan == 1) |>
     rescale(param, sub, ses, task, scan) |>
     dplyr::mutate(dataset = "spacetop") |>
     dplyr::inner_join(.avg_by_run(by_run), by = dplyr::join_by(sub, dataset))
