@@ -1,0 +1,128 @@
+# Single source of truth for author and affiliation metadata.
+#
+# Consumed by:
+#   - the manuscript, via `metadata-files` in _quarto.yml
+#   - the bioRxiv submission sheet, via `Rscript R/make_author_tsv.R`
+#
+# Edit authors here and nowhere else. After editing, regenerate the bioRxiv
+# sheet so the two stay in sync.
+#
+# Note: affiliation names are rendered by LaTeX, so `&` must be written `\&`.
+# The TSV script unescapes this automatically.
+
+author:
+  - name: Patrick Sadil
+    corresponding: true
+    email: psadil1@jh.edu
+    orcid: 0000-0003-4141-1343
+    affiliations:
+      - ref: jhu
+  - name: Briha Ansari
+    orcid: 0000-0001-8316-3320
+    email: bansari1@jhu.edu
+    affiliations:
+      - ref: jhu
+  - name: Agostina Casamento-Moran
+    orcid: 0000-0002-6642-4469
+    email: agoscasamento@ufl.edu
+    affiliations:
+      - ref: bme
+      - ref: kki
+  - name: Ann S. Choe
+    orcid: 0000-0001-7352-1489
+    email: annschoe@jhmi.edu
+    affiliations:
+      - ref: dor
+      - ref: krc
+  - name: Jungin Choi
+    email: jchoi177@jhu.edu
+    affiliations:
+      - ref: jhu
+  - name: Farzad V. Farahani
+    email: farzad.vasheghani@gmail.com
+    orcid: 0000-0003-3196-6759
+    affiliations:
+      - ref: jaj
+  - name: Lukman E. Ismaila
+    orcid: 0000-0003-0001-371X
+    email: lismail1@jhu.edu
+    affiliations:
+      - ref: dor
+      - ref: krc
+  - name: Micah Alan Johnson
+    orcid: 0000-0001-6625-2719
+    email: micah.alan.johnson@gmail.com
+    affiliations:
+      - ref: jhu
+  - name: Arunkumar Kannan
+    orcid: 0009-0008-4981-444X
+    email: akannan7@jhu.edu
+    affiliations:
+      - ref: ece
+  - name: Mary Beth Nebel
+    orcid: 0000-0003-0185-3382
+    email: mb@jhmi.edu
+    affiliations:
+      - ref: don
+      - ref: nir
+  - name: James J. Pekar
+    orcid: 0000-0002-9830-0655
+    email: jpekar1@jhmi.edu
+    affiliations:
+      - ref: dor
+      - ref: krc
+  - name: Haris Iqbal Sair
+    orcid: 0000-0002-5077-0471
+    email: hsair1@jhmi.edu
+    affiliations:
+      - ref: dor
+      - ref: ehc
+  - name: Joshua Stim
+    orcid: 0000-0002-3059-8571
+    email: jstim1@jh.edu
+    affiliations:
+      - ref: jhu
+  - name: Adrian M. Svingos
+    orcid: 0000-0001-7271-2136
+    email: svingos@kennedykrieger.org
+    affiliations:
+      - ref: bic
+      - ref: pmr
+  - name: Tor D. Wager
+    orcid: 0000-0002-1936-5574
+    email: Tor.D.Wager@dartmouth.edu
+    affiliations:
+      - ref: pbs
+  - name: Martin A. Lindquist
+    orcid: 0000-0003-2289-0828
+    email: mlindqui@jhsph.edu
+    affiliations:
+      - ref: jhu
+
+affiliations:
+  - id: jhu
+    name: Johns Hopkins Bloomberg School of Public Health
+  - id: bme
+    name: Department of Biomedical Engineering, Johns Hopkins School of Medicine
+  - id: kki
+    name: Kennedy Krieger Institute
+  - id: dor
+    name: Department of Radiology, The Russell H. Morgan Department of Radiology and Radiological Science, Johns Hopkins University School of Medicine
+  - id: krc
+    name: Kirby Research Center for Functional Brain Imaging, Kennedy Krieger Institute
+  - id: jaj
+    name: Johnson \& Johnson
+  - id: ece
+    name: Department of Electrical and Computer Engineering, Johns Hopkins Whiting School of Engineering
+  - id: don
+    name: Department of Neurology, Johns Hopkins School of Medicine
+  - id: nir
+    name: Center for Neurodevelopmental and Imaging Research, Kennedy Krieger Institute
+  - id: ehc
+    name: The Malone Center for Engineering in Healthcare, The Whiting School of Engineering, Johns Hopkins University
+  - id: bic
+    name: Brain Injury Clinical Research Center, Kennedy Krieger Institute
+  - id: pmr
+    name: Department of Physical Medicine and Rehabilitation, Johns Hopkins University School of Medicine
+  - id: pbs
+    name: Department of Psychological and Brain Sciences, Dartmouth College

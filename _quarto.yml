@@ -1,7 +1,14 @@
 project:
   type: manuscript
-  render: 
+  render:
     - "index.qmd"
+
+# Author and affiliation metadata lives only in _authors.yml, which is also
+# what R/make_author_tsv.R reads to build the bioRxiv submission sheet.
+# Do not add an `author:` block to index.qmd -- document metadata overrides
+# metadata-files, so it would silently win.
+metadata-files:
+  - _authors.yml
 
 
 format:
@@ -53,7 +60,11 @@ format:
         \def\DJ{{\fontencoding{T1}\selectfont\char208}}
         % Shrink long (page-breaking) tables. \begin{longtable} resets the font,
         % so the size must be applied via a hook that fires after its setup.
-        % Only the model-fit tables (tbl-fits*) are longtables; all other
-        % tables are tabular*, so they are unaffected.
+        % The hook is gated on a switch so it only affects the tables we opt in
+        % (the wide model-fit tables); markdown tables elsewhere, such as
+        % tbl-overview, are also longtables and must render at normal size.
+        % Opt in per table with \renewcommand{\apatablesize}{\tiny} and reset
+        % it to empty afterwards.
         \usepackage{etoolbox}
-        \AtBeginEnvironment{longtable}{\tiny}
+        \newcommand{\apatablesize}{}
+        \AtBeginEnvironment{longtable}{\apatablesize}
