@@ -9,13 +9,16 @@ author:
     affiliations:
       - ref: jhu
   - name: Briha Ansari
+    orcid: 0000-0001-8316-3320
     affiliations:
       - ref: jhu
   - name: Agostina Casamento-Moran
+    orcid: 0000-0002-6642-4469
     affiliations:
       - ref: bme
       - ref: kki
   - name: Ann S. Choe
+    orcid: 0000-0001-7352-1489
     affiliations:
       - ref: dor
       - ref: krc
@@ -23,9 +26,11 @@ author:
     affiliations:
       - ref: jhu
   - name: Farzad V. Farahani
+    orcid: 0000-0003-3196-6759
     affiliations:
       - ref: jaj
   - name: Lukman E. Ismaila
+    orcid: 0000-0003-0001-371X
     affiliations:
       - ref: dor
       - ref: krc
@@ -34,24 +39,30 @@ author:
     affiliations:
       - ref: jhu
   - name: Arunkumar Kannan
+    orcid: 0009-0008-4981-444X
     affiliations:
       - ref: ece
   - name: Mary Beth Nebel
+    orcid: 0000-0003-0185-3382
     affiliations:
       - ref: don
       - ref: nir
   - name: James J. Pekar
+    orcid: 0000-0002-9830-0655
     affiliations:
       - ref: dor
       - ref: krc
   - name: Haris Iqbal Sair
+    orcid: 0000-0002-5077-0471
     affiliations:
       - ref: dor
       - ref: ehc
   - name: Joshua Stim
+    orcid: 0000-0002-3059-8571
     affiliations:
       - ref: jhu
   - name: Adrian M. Svingos
+    orcid: 0000-0001-7271-2136
     affiliations:
       - ref: bic
       - ref: pmr
