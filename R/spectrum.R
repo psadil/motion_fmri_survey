@@ -159,25 +159,30 @@ get_spacetop_spectrum <- function(src, spacetop, by_run) {
 
   alignvideo <- freqs |>
     dplyr::filter(task == "alignvideo") |>
-    dplyr::filter(n == 690)
+    dplyr::filter(n == 618)
 
-  shortvideo <- freqs |>
-    dplyr::filter(task == "shortvideo") |>
-    dplyr::filter(n == 456)
+  # shortvideo has two comparable groups of participants
+  # shortvideo <- freqs |>
+  #   dplyr::semi_join(freq_short, by = dplyr::join_by(task, freq))
+  shortvideo <- duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
+    dplyr::mutate(scan = as.integer(run)) |>
+    dplyr::filter(scan == 1, task == "shortvideo") |>
+    dplyr::filter(as.integer(sub) < 31) |>
+    dplyr::distinct(task, sub)
 
   duckplyr::read_parquet_duckdb(src, prudence = "lavish") |>
     dplyr::filter(freq > 0) |>
     dplyr::mutate(ses = as.integer(ses), scan = run) |> # need to strip leading 0 before do_casting
     do_casting() |>
     dplyr::filter(scan == 1) |>
+    dplyr::anti_join(shortvideo, by = dplyr::join_by(task, sub)) |>
     dplyr::semi_join(
       dplyr::bind_rows(
         dplyr::filter(
           freqs,
-          !(task %in% c("alignvideo", "shortvideo", "fractional", "narratives"))
+          !(task %in% c("alignvideo", "fractional", "narratives"))
         ),
         alignvideo,
-        shortvideo,
         fractional,
         narratives
       ),

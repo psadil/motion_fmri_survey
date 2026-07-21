@@ -36,7 +36,7 @@ def get_peaks(d: pl.DataFrame, tr: float, cols: list[str]) -> pl.DataFrame:
 
 
 root = Path("derivatives") / "premotion"
-derivatives = Path("derivatives") / "motion"
+derivatives = Path("derivatives")
 
 (
     pl
@@ -150,12 +150,12 @@ abcd_too_short = (
 
 # spacetop
 tsvs = []
-for subdir in Path("/dcs07/smart/data/SpatialTopology/ds005256-fmriprep").glob("sub*"):
-    print(subdir)
+for s, subdir in enumerate(Path("sourcedata/ds005256-fmriprep").glob("sub*")):
+    print(f"{s}, {subdir}")
     sub = re.findall(r"(?<=sub-)\d{4}", subdir.name)
     for sesdir in subdir.glob("ses*"):
         ses = re.findall(r"(?<=ses-)\d{2}", sesdir.name)
-        for tsv in sesdir.rglob("*tsv"):
+        for tsv in sesdir.rglob("*tsv.zst"):
             task = re.findall(r"(?<=task-)[a-zA-Z]+", tsv.name)
             run = re.findall(r"(?<=run-)\d+", tsv.name)
             tsvs.append(
@@ -180,5 +180,5 @@ tmp: pl.DataFrame = pl.concat(tsvs)
     tmp
     .pipe(get_peaks, tr=0.46, cols=["sub", "ses", "task", "run"])
     .fill_null(0)
-    .write_parquet(derivatives / "spacetop_spectrum.parquet")
+    .write_parquet(derivatives / "spacetop_spectrum2.parquet")
 )

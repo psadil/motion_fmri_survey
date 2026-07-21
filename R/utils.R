@@ -407,15 +407,114 @@ truncate_to_modal_lengths <- function(d) {
 }
 
 
-plot_demo_tbl <- function(by_run, demographics, ds) {
-  by_run |>
-    dplyr::filter(dataset == ds) |>
+# One combined demographics table across all datasets/sessions.
+# Returns a tinytable, which renders natively to LaTeX/HTML/Typst/Word so the
+# manuscript is not tied to any one output format. `format_tt(escape = TRUE)`
+# is essential: the "%" in the Female column is a LaTeX comment character and
+# will silently swallow row terminators if left unescaped.
+make_demographics_table <- function(by_run, demographics) {
+  fmt_mi <- function(x, digits = 0) {
+    x <- x[!is.na(x)]
+    if (!length(x)) {
+      return(NA_character_)
+    }
+    q <- round(stats::quantile(x, c(0.5, 0.25, 0.75)), digits)
+    glue::glue("{q[1]} ({q[2]}, {q[3]})")
+  }
+  ds_levels <- c(
+    hcpya = "HCPYA",
+    ukb = "UKB",
+    hcpd = "HCPD",
+    hcpa = "HCPA",
+    abcd = "ABCD",
+    spacetop = "SpaceTop"
+  )
+  demo <- by_run |>
     dplyr::distinct(sub, ses, dataset) |>
-    dplyr::left_join(demographics) |>
-    dplyr::select(sub, ses, Age = age, BMI = bmi, Sex = sex) |>
-    dplyr::mutate(ses = forcats::fct_drop(ses), Sex = forcats::fct_drop(Sex)) |>
-    gtsummary::tbl_summary(by = ses, include = c(-sub)) |>
-    gtsummary::modify_header(label ~ glue::glue("**{ds}**"))
+    dplyr::left_join(demographics, by = c("dataset", "sub", "ses")) |>
+    dplyr::summarise(
+      N = dplyr::n_distinct(sub),
+      Age = fmt_mi(age, 1),
+      BMI = fmt_mi(bmi, 1),
+      Female = {
+        f <- sum(sex == "F", na.rm = TRUE)
+        sprintf("%s (%.0f%%)", format(f, big.mark = ","), 100 * f / dplyr::n())
+      },
+      .by = c(dataset, ses)
+    ) |>
+    dplyr::filter(!is.na(Age)) |>
+    dplyr::mutate(Dataset = factor(ds_levels[dataset], levels = ds_levels)) |>
+    dplyr::arrange(Dataset, ses) |>
+    dplyr::mutate(
+      N = format(N, big.mark = ","),
+      BMI = tidyr::replace_na(BMI, "—"),
+      Session = dplyr::if_else(ses == "1", "", as.character(ses)),
+      Dataset = dplyr::if_else(duplicated(Dataset), "", as.character(Dataset))
+    )
+
+  demo |>
+    dplyr::select(Dataset, Session, N, Age, BMI, Female) |>
+    tinytable::tt() |>
+    tinytable::format_tt(escape = TRUE) |>
+    tinytable::style_tt(j = 1, bold = TRUE)
+}
+
+# High- vs low-mover demographics, one narrow tinytable. High/low are columns
+# under per-dataset spanners so the two groups sit side by side; the group N is
+# moved to its own row so the column headers can stay short ("Low"/"High") and
+# the table fits the page width. See make_demographics_table for the escape note.
+make_highlow_table <- function(group_highlow, demographics) {
+  fmt_mi <- function(x, digits = 1) {
+    x <- x[!is.na(x)]
+    if (!length(x)) {
+      return(NA_character_)
+    }
+    q <- round(stats::quantile(x, c(.5, .25, .75)), digits)
+    sprintf("%s (%s, %s)", q[1], q[2], q[3])
+  }
+  pct <- function(sex, lvl) {
+    n <- sum(sex == lvl, na.rm = TRUE)
+    sprintf("%s (%.0f%%)", format(n, big.mark = ","), 100 * n / length(sex))
+  }
+  summ <- group_highlow |>
+    dplyr::left_join(demographics, by = c("dataset", "sub")) |>
+    dplyr::filter(
+      (dataset == "abcd" & ses == "Baseline") | dataset == "hcpya"
+    ) |>
+    dplyr::summarise(
+      N = format(dplyr::n_distinct(sub), big.mark = ","),
+      Female = pct(sex, "F"),
+      Male = pct(sex, "M"),
+      Age = fmt_mi(age),
+      BMI = fmt_mi(bmi),
+      .by = c(dataset, split)
+    ) |>
+    dplyr::mutate(
+      split = factor(split, levels = c("Low Movers", "High Movers")),
+      dataset = factor(dataset, levels = c("abcd", "hcpya"))
+    ) |>
+    dplyr::arrange(dataset, split)
+
+  wide <- summ |>
+    dplyr::mutate(col = paste(dataset, split, sep = "|")) |>
+    dplyr::select(col, N, Female, Male, Age, BMI) |>
+    tidyr::pivot_longer(-col, names_to = "Characteristic") |>
+    tidyr::pivot_wider(names_from = col, values_from = value)
+
+  disp <- data.frame(
+    Characteristic = wide$Characteristic,
+    wide[["abcd|Low Movers"]],
+    wide[["abcd|High Movers"]],
+    wide[["hcpya|Low Movers"]],
+    wide[["hcpya|High Movers"]],
+    check.names = FALSE
+  )
+  names(disp) <- c("Characteristic", "Low", "High", "Low", "High")
+
+  disp |>
+    tinytable::tt() |>
+    tinytable::format_tt(escape = TRUE) |>
+    tinytable::group_tt(j = list("ABCD (Baseline)" = 2:3, "HCPYA" = 4:5))
 }
 
 read_distinct_collect <- function(source) {
@@ -461,7 +560,7 @@ plot_spectrum <- function(spectrums) {
     ggplot2::facet_grid(task ~ param, scales = "free_y") +
     ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
     ggplot2::scale_fill_viridis_c(option = "turbo") +
-    ggplot2::ylab("(<- lower avg fd) participant (higher avg fd ->)") +
+    ggplot2::ylab("participant\n(<- lower avg fd, higher avg fd ->)") +
     ggplot2::theme(
       axis.ticks.y = ggplot2::element_blank(),
       axis.text.y = ggplot2::element_blank()

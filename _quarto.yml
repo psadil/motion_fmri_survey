@@ -5,28 +5,55 @@ project:
 
 
 format:
-  pdf:
-    documentclass: imag-ms-template
-    include-in-header:
-      - text: |
-          \usepackage[section]{placeins}
-          \usepackage{tikz}
-          \usepackage{pdflscape}
-          \usepackage{caption}
-          \usepackage{subcaption}
-          \usepackage{siunitx}
-          \usepackage{fontspec}
-          \usepackage{authblk}
-          \usepackage{cleveref}
-          \usepackage{tabularx}
-          \usepackage{tabularray}
-          \usepackage[smartEllipses]{markdown}
-          \newcommand{\tabitem}{~~\llap{\textbullet}~~}
-          \def\DJ{{\fontencoding{T1}\selectfont\char208}}
-    journal:
-      name: bioRxiv
-      formatting: preprint
-      model: 1p
-      cite-style: authoryear
+  # pdf:
+    # documentclass: imag-ms-template
+    # include-in-header:
+    #   - text: |
+    #       \usepackage[section]{placeins}
+    #       \usepackage{tikz}
+    #       \usepackage{pdflscape}
+    #       \usepackage{caption}
+    #       \usepackage{subcaption}
+    #       \usepackage{siunitx}
+    #       \usepackage{fontspec}
+    #       \usepackage{authblk}
+    #       \usepackage{cleveref}
+    #       \usepackage{tabularx}
+    #       \usepackage{tabularray}
+    #       \usepackage[smartEllipses]{markdown}
+    #       \newcommand{\tabitem}{~~\llap{\textbullet}~~}
+    #       \def\DJ{{\fontencoding{T1}\selectfont\char208}}
+    # journal:
+    #   name: bioRxiv
+    #   formatting: preprint
+    #   model: 1p
+    #   cite-style: authoryear
+    # keep-tex: true
+    # latex-max-runs: 20
+  apaquarto-pdf: 
+    # Can be jou (journal), man (manuscript), stu (student), or doc (document)
+    documentmode: man
     keep-tex: true
-    latex-max-runs: 20
+    pdf-standard: ua-2
+    include-in-header:
+    - text: |
+        \usepackage[section]{placeins}
+        \usepackage{tikz}
+        \usepackage{pdflscape}
+        \usepackage{caption}
+        \usepackage{subcaption}
+        \usepackage{siunitx}
+        \usepackage{fontspec}
+        \usepackage{authblk}
+        \usepackage{cleveref}
+        \usepackage{tabularx}
+        \usepackage{tabularray}
+        \usepackage[smartEllipses]{markdown}
+        \newcommand{\tabitem}{~~\llap{\textbullet}~~}
+        \def\DJ{{\fontencoding{T1}\selectfont\char208}}
+        % Shrink long (page-breaking) tables. \begin{longtable} resets the font,
+        % so the size must be applied via a hook that fires after its setup.
+        % Only the model-fit tables (tbl-fits*) are longtables; all other
+        % tables are tabular*, so they are unaffected.
+        \usepackage{etoolbox}
+        \AtBeginEnvironment{longtable}{\tiny}

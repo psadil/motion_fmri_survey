@@ -230,7 +230,7 @@ list(
   ),
   tar_target(
     spacetop_spectrum_src,
-    "data/motion/derivatives/spacetop_spectrum.parquet",
+    "data/motion/derivatives/spacetop_spectrum2.parquet",
     format = "file"
   ),
   tar_target(

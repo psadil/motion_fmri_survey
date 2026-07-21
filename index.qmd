@@ -1,5 +1,6 @@
 ---
 title: The State of Motion; Demographic and representational consequences of motion-based exclusion in fMRI
+shorttitle: The State of Motion
 author:
   - name: Patrick Sadil
     corresponding: true
@@ -136,6 +137,7 @@ library(glmmTMB)
 targets::tar_load(c(
   by_run,
   demographics,
+  group_highlow,
   orig_counts,
   abcd_source,
   freq_limits,
@@ -158,7 +160,7 @@ Consider the case of the ABCD, which, to our knowledge, is the only population-l
 
 Here, we sought to understand the scope of these issues across the neuroimaging field, exploring the extent to which motion acts as a population-level filter (that is, a non-random selection mechanism that determines which participants remain available for analyses). To do this, we survey head motion across six prominent, publicly available datasets spanning childhood through older adulthood: the Human Connectome Project-Young Adult [HCPYA @marcus_human_2013], UK Biobank [UKB @alfaro_image_2018], Human Connectome Project in Development [HCPD @harms_extending_2018], Human Connectome Project in Aging [HCPA @harms_extending_2018], the Adolescent Brain Cognitive Development [ABCD @casey_adolescent_2018] study, and the Spatial Topology (SpaceTop) project [@jung_spacetop_2025]. Together, these datasets comprise more than 50,000 unique participants and more than 300,000 scans. We further benchmark our findings against motion distributions reported by MRIQC [@esteban_mriqc_2017], which, as of writing, aggregates data from over 1.5 million scans. By quantifying motion across large-scale cohorts, we assess both its magnitude and its demographic consequences under commonly applied exclusion thresholds. We address four questions ([@tbl-overview]): (A) How much do participants move across major datasets? (B) In these datasets, which participant characteristics are related to motion? (C) Which demographic groups are disproportionately excluded? and (D) What are the implications for sample composition and downstream inference? We find that exclusion is both substantial and demographically patterned, with negative implications for the generalizability of population neuroimaging findings.
 
-::: {#tbl-overview}
+::: {#tbl-overview after-caption-space="12pt"}
 ```{=latex}
 \begin{table}[th]
 \begin{tabularx}{\linewidth}{lX}
@@ -278,7 +280,7 @@ In each scan condition, respiration frequencies were estimated from the translat
 
 To remove respiratory-related frequencies, we adopted an approach similar to the "Fixed Frequency" method of [@fair_correction_2020]. The lower and upper cutoff frequencies of a second-order infinite-impulse-response notch filter were set at the median and third quartile of the distribution of peak frequencies within each condition and session. Although peak frequencies were estimated from the motion parameters rather than from direct respiratory recordings, the resulting notch filter closely resembled the respiration band filter reported by @fair_correction_2020 (@tbl-filters).
 
-::: {#tbl-filters}
+::: {#tbl-filters after-caption-space="12pt"}
 ```{r filters}
 
 freq_limits |>
@@ -449,43 +451,13 @@ These findings demonstrate that head motion is not a static property of a datase
 
 ## Who Moves?
 
-::: {#tbl-demographics}
-```{r demographics-ukb}
-plot_demo_tbl(by_run, demographics, "ukb")
+::: {#tbl-demographics after-caption-space="12pt"}
+```{r demographics}
+#| echo: false
+make_demographics_table(by_run, demographics)
 ```
 
-```{r demographics-abcd}
-plot_demo_tbl(by_run, demographics, "abcd")
-```
-
-```{r demographics-spacetop}
-by_run |>
-  dplyr::filter(dataset == "spacetop", ses == 1) |>
-  dplyr::distinct(sub, ses, dataset) |>
-  dplyr::left_join(demographics) |>
-  dplyr::select(sub, ses, Age = age, Sex = sex) |>
-  dplyr::mutate(ses = forcats::fct_drop(ses), Sex = forcats::fct_drop(Sex)) |>
-  gtsummary::tbl_summary(by = ses, include = c(-sub)) |>
-  gtsummary::modify_header(label ~ "**SpaceTop**")
-```
-
-Participant Demographics. Missing values are implicit. Numbers represent averages (with ranges) or counts (with percentages).
-:::
-
-::: {#tbl-demographics-hcp}
-```{r demographics-hcpya}
-plot_demo_tbl(by_run, demographics, "hcpya")
-```
-
-```{r demographics-hcpa}
-plot_demo_tbl(by_run, demographics, "hcpa")
-```
-
-```{r demographics-hcpd}
-plot_demo_tbl(by_run, demographics, "hcpd")
-```
-
-HCP Participant Demographics. Data shown as in @tbl-demographics
+Participant Demographics. Age and BMI are shown as median (Q1, Q3); Female as n (%). BMI was not recorded for SpaceTop. Sessions are listed only for datasets with repeated measures.
 :::
 
 Across all datasets, there were `r demographics |> dplyr::distinct(sub, dataset) |> nrow()` unique individuals (\SI{`r ((dplyr::filter(demographics, dataset=="ukb") |> dplyr::distinct(sub, dataset) |> nrow()) / (demographics |> dplyr::distinct(sub, dataset) |> nrow()) |> round(digits=2) |> magrittr::multiply_by(.01)) |> round()`}{\percent} of whom were from UKB) and `r by_run |> dplyr::filter(!filtered) |> nrow()` scans with motion data. The youngest participant was in the HCPD dataset (`r min(demographics$age) |> round(2)` years old), and the oldest was in the HCPA dataset (over 85 years old). This broad age range enabled us to examine motion patterns across nearly the entire lifespan.
@@ -577,38 +549,14 @@ contrast_sex_age <- rest_fit |>
 
 There was a statistically significant difference for sex, with females moving slightly less than males (estimated marginal mean contrast at average age `r round(mean(demographics$age), digits=2)` and average BMI `r round(mean(demographics$bmi, na.rm = TRUE), digits=2)`: `r format_tidy_contrast(tidy_contrast_sex, digits=3)`). Importantly, sex differences were more pronounced in younger cohorts (@fig-chart c), suggesting developmental interactions. Indeed, at the BMI that is equal to the average for ABCD (`r round(avg_abcd_bmi, 2)`), there was a significant interaction between the effect of sex at age 9 as compared to the effect of sex at age 15 (`r format_tidy_contrast(contrast_sex_age, digits=3)`), indicating that sex differences diminish with increasing age during development.
 
-::: {#tbl-highlow}
-```{r highlow-abcd}
-targets::tar_read(group_highlow) |>
-  dplyr::left_join(demographics) |>
-  dplyr::filter(dataset == "abcd", ses == "Baseline") |>
-  dplyr::mutate(
-    sex = factor(sex),
-    dataset = dplyr::if_else(dataset == "abcd", "ABCD (Baseline)", "HCPYA")
-  ) |>
-  dplyr::select(dataset, split, sex, age, bmi) |>
-  gtsummary::tbl_strata(
-    strata = dataset,
-    .tbl_fun = ~ .x |> gtsummary::tbl_summary(by = split, missing = "no")
-  )
+::: {#tbl-highlow after-caption-space="12pt"}
+
+```{r highlow}
+#| echo: false
+make_highlow_table(group_highlow, demographics)
 ```
 
-```{r highlow-hcpya}
-targets::tar_read(group_highlow) |>
-  dplyr::left_join(demographics) |>
-  dplyr::filter(dataset == "hcpya") |>
-  dplyr::mutate(
-    sex = factor(sex),
-    dataset = dplyr::if_else(dataset == "abcd", "ABCD (Baseline)", "HCPYA")
-  ) |>
-  dplyr::select(dataset, split, sex, age, bmi) |>
-  gtsummary::tbl_strata(
-    strata = dataset,
-    .tbl_fun = ~ .x |> gtsummary::tbl_summary(by = split, missing = "no")
-  )
-```
-
-Demographic Variables in High and Low Motion Subgroups (groups defined as in @fig-groups). In the ABCD table, demographics refer to the baseline session.
+Demographic Variables in High and Low Motion Subgroups (groups defined as in @fig-groups). Age and BMI are shown as median (Q1, Q3); sex as n (%). In the ABCD columns, demographics refer to the baseline session.
 :::
 
 ### Motion as a function of Psychological Characteristics
@@ -986,9 +934,7 @@ Motion Spectrum in ABCD (Final Two Sessions).
 
 ## Model Fit {#sec-fits}
 
-\tiny
-
-::: {#tbl-fits .small-caption}
+::: {#tbl-fits apa-longtable="true"}
 ```{r fits}
 compare_datasets_fit |>
   report::report() |>
@@ -997,12 +943,12 @@ compare_datasets_fit |>
   insight::export_table(format = "md")
 ```
 
-\tiny Linear Mixed Effects Model Summary of Average Motion in Resting State Scans for Comparison of HCPD and ABCD. The model formula was `fd ~ external + internal + attention + age * bmi * sex + manufacturer + manufacturer:age + (1 | sub)`, where `fd` is runwise average framewise displacement (in ABCD and HCPD only), `external`, `internal`, and `attention` are binary factors indicating symptoms, and `manufacturer` is a factor indicating the manufacturer of the scanner used for scanning. Manufacturer was included to account for differences in the acquisition parameters [@hagler_image_2019]. All HCPD scans were collected on a Siemens scanner, and so, for convenience of constructing a contrast for dataset, the manufacturer in the HCPD dataset was set not the Siemens but instead Siemens-HCD. The model was fit using `glmmTMB` [@mcgillycuddy2025parsimoniously].
+Linear Mixed Effects Model Summary of Average Motion in Resting State Scans for Comparison of HCPD and ABCD. The model formula was `fd ~ external + internal + attention + age * bmi * sex + manufacturer + manufacturer:age + (1 | sub)`, where `fd` is runwise average framewise displacement (in ABCD and HCPD only), `external`, `internal`, and `attention` are binary factors indicating symptoms, and `manufacturer` is a factor indicating the manufacturer of the scanner used for scanning. Manufacturer was included to account for differences in the acquisition parameters [@hagler_image_2019]. All HCPD scans were collected on a Siemens scanner, and so, for convenience of constructing a contrast for dataset, the manufacturer in the HCPD dataset was set not the Siemens but instead Siemens-HCD. The model was fit using `glmmTMB` [@mcgillycuddy2025parsimoniously].
 :::
 
 \newpage
 
-::: {#tbl-fits-rest .small-caption}
+::: {#tbl-fits-rest apa-longtable="true"}
 ```{r fits-rest}
 rest_fit |>
   report::report() |>
@@ -1011,5 +957,5 @@ rest_fit |>
   insight::export_table(format = "md")
 ```
 
-\tiny Linear Mixed Effects Model Summary of Average Motion in Resting State Scans. The model formula was `fd ~  age * bmi * sex + dataset + dataset:age + (1 | sub)`, where `fd` is runwise average framewise displacement (all datasets included). The model was fit using `glmmTMB` [@mcgillycuddy2025parsimoniously].
+Linear Mixed Effects Model Summary of Average Motion in Resting State Scans. The model formula was `fd ~  age * bmi * sex + dataset + dataset:age + (1 | sub)`, where `fd` is runwise average framewise displacement (all datasets included). The model was fit using `glmmTMB` [@mcgillycuddy2025parsimoniously].
 :::

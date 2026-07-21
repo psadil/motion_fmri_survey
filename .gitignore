@@ -31,3 +31,6 @@ figures
 **/.DS_Store
 
 **/*.quarto_ipynb
+
+/.luarc.json
+data/motion/sourcedata
