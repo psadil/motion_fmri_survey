@@ -4,7 +4,7 @@ shorttitle: The State of Motion
 keywords:
   - MRI
 abstract: |
-  Large-scale neuroimaging datasets are increasingly used to map relationships between brain structure, function, and behavior across the human lifespan. Routinely, analyses exclude participants who moved too much during imaging. While this decision is framed as quality control, it is increasingly recognized that head motion is not randomly distributed across individuals within a study, and so motion-based exclusion may preferentially remove people with particular characteristics relevant to the scientific goals of the study. Here we survey head motion and how it relates to participant characteristics across six large, publicly available datasets spanning nearly the entire human lifespan, namely the Human Connectome Project (HCP) Young Adult, HCP in Development, HCP in Aging, Adolescent Brain Cognitive Development study, UK Biobank, and Spatial Topology project. These six datasets comprise more than 50,000 unique participants and 300,000 scans. We further benchmark our findings against motion distributions aggregated by MRIQC across more than 1.5 million scans. Under commonly applied strict exclusion thresholds, large fractions of participants would be removed (exceeding \SI{80}{\percent} in the UK Biobank task data), and these removals were demographically structured, disproportionately excluding younger and older participants, those with higher BMI, and those with motion-associated clinical conditions. Respiratory pseudo-motion inflated estimates of head motion in adult cohorts, and applying notch filtering to remove respiratory frequencies from these estimates meaningfully reduced exclusion rates. Exclusion also carried downstream consequences. Strict thresholds reduced statistical power, inflated study costs, and altered the apparent predictability of behavioral phenotypes by removing a non-random, behaviorally distinct subgroup. These findings demonstrate that motion exclusion thresholds are not neutral quality-control decisions but structured selection mechanisms that reshape the composition of neuroimaging samples. We recommend that studies report the demographic characteristics of excluded participants, prefer data-driven censoring methods over fixed motion cutoffs, and clarify the target population while considering appropriate weighting techniques. 
+  Large-scale neuroimaging datasets are increasingly used to map relationships between brain structure, function, and behavior across the human lifespan. Routinely, analyses exclude participants who moved too much during imaging. While this decision is framed as quality control, it is increasingly recognized that head motion is not randomly distributed across individuals within a study, and so motion-based exclusion may preferentially remove people with particular characteristics relevant to the scientific goals of the study. Here we survey head motion and how it relates to participant characteristics across six large, publicly available datasets spanning nearly the entire human lifespan, namely the Human Connectome Project (HCP) Young Adult, HCP in Development, HCP in Aging, Adolescent Brain Cognitive Development^{SM} Study, UK Biobank, and Spatial Topology project. These six datasets comprise more than 50,000 unique participants and 300,000 scans. We further benchmark our findings against motion distributions aggregated by MRIQC across more than 1.5 million scans. Under commonly applied strict exclusion thresholds, large fractions of participants would be removed (exceeding \SI{80}{\percent} in the UK Biobank task data), and these removals were demographically structured, disproportionately excluding younger and older participants, those with higher BMI, and those with motion-associated clinical conditions. Respiratory pseudo-motion inflated estimates of head motion in adult cohorts, and applying notch filtering to remove respiratory frequencies from these estimates meaningfully reduced exclusion rates. Exclusion also carried downstream consequences. Strict thresholds reduced statistical power, inflated study costs, and altered the apparent predictability of behavioral phenotypes by removing a non-random, behaviorally distinct subgroup. These findings demonstrate that motion exclusion thresholds are not neutral quality-control decisions but structured selection mechanisms that reshape the composition of neuroimaging samples. We recommend that studies report the demographic characteristics of excluded participants, prefer data-driven censoring methods over fixed motion cutoffs, and clarify the target population while considering appropriate weighting techniques. 
 plain-language-summary: |
   . TODO
 key-points:
@@ -67,7 +67,7 @@ The scale of participant exclusion is considerable. For example, in two reports 
 
 Unfortunately, participant motion correlates systematically with demographic and clinical characteristics [@makowski_head_2019; @cosgrove_limits_2022], meaning that motion-based exclusion functions as a non-random filter on study samples [@peverill_balancing_2025]. For example, children with more profound clinical symptoms of autism spectrum disorder often move more in the scanner than their neurotypical peers or even children with less profound symptoms, potentially yielding analytic samples that underrepresent this population [@nebel_accounting_2022; @shi_differences_2025]. Elevated motion relative to healthy controls has also been reported in individuals with multiple sclerosis, schizophrenia, bipolar disorder, and stroke survivors [@seto_quantifying_2001; @wylie_functional_2014; @yao_inferring_2017; @pardoe_motion_2016]. Motion levels are stable within individuals across scans [@zuo_open_2014; @van_influence_2012; @yan_comprehensive_2013; @kong_individual_2014; @liu_longitudinal_2017; @zeng_neurobiological_2014], and they has been associated with a broad range of characteristics in the general population, including age, sex, body size, hyperactivity-impulsivity, blood pressure, language ability, and nicotine use, among other factors [@satterthwaite_heterogeneous_2013; @bolton_agito_2020; @ekhtiari_physical_2019; @kong_individual_2014; @frew_getting_2022; @teo_comparison_2024; @siegel_data_2017; @ward_head_2024; @power_critical_2020; @shi_differences_2025].
 
-Consider the case of the ABCD, which, to our knowledge, is the only population-level dataset that has been used to explore these relationships between motion, participant characteristics, motion-based exclusion, and biased downstream inferences [@peverill_balancing_2025]. One of the strengths of the ABCD study design is the use of multi-stage probability sampling, which resulted in a sample population that approximately represents the US [@garavan_recruiting_2018]. Although this approximate matching is imperfect [@gard_weight_2023; @compton2019ensuring] and also conflicts with other goals of the ABCD, such as the recruitment of a relatively high proportion of children who exhibit symptoms related to mental health issues, a sample population that closely resembles the target (US) population along major axes like race and sex simplifies some analyses. However, excluding participants based on motion alters the distribution of even those characteristics that resemble the target population, like race and ethnicity [@cosgrove_limits_2022]. For example, non-white children were approximately twice as likely as white children to be excluded based on motion. In some circumstances, such losses can be mitigated by statistical techniques [@gard_weight_2023; @lewinn_sample_2017; @nebel_accounting_2022]. But there remains a need to understand the prevalence of these issues in datasets beyond the ABCD, to understand how routine preprocessing decisions shape representativeness and, ultimately, to understand the generalizability of conclusions drawn from population neuroimaging studies.
+Consider the case of the ABCD Study®, which, to our knowledge, is the only population-level dataset that has been used to explore these relationships between motion, participant characteristics, motion-based exclusion, and biased downstream inferences [@peverill_balancing_2025]. One of the strengths of the ABCD study design is the use of multi-stage probability sampling, which resulted in a sample population that approximately represents the US [@garavan_recruiting_2018]. Although this approximate matching is imperfect [@gard_weight_2023; @compton2019ensuring] and also conflicts with other goals of the ABCD, such as the recruitment of a relatively high proportion of children who exhibit symptoms related to mental health issues, a sample population that closely resembles the target (US) population along major axes like race and sex simplifies some analyses. However, excluding participants based on motion alters the distribution of even those characteristics that resemble the target population, like race and ethnicity [@cosgrove_limits_2022]. For example, non-white children were approximately twice as likely as white children to be excluded based on motion. In some circumstances, such losses can be mitigated by statistical techniques [@gard_weight_2023; @lewinn_sample_2017; @nebel_accounting_2022]. But there remains a need to understand the prevalence of these issues in datasets beyond the ABCD, to understand how routine preprocessing decisions shape representativeness and, ultimately, to understand the generalizability of conclusions drawn from population neuroimaging studies.
 
 Here, we sought to understand the scope of these issues across the neuroimaging field, exploring the extent to which motion acts as a population-level filter (that is, a non-random selection mechanism that determines which participants remain available for analyses). To do this, we survey head motion across six prominent, publicly available datasets spanning childhood through older adulthood: the Human Connectome Project-Young Adult [HCPYA @marcus_human_2013], UK Biobank [UKB @alfaro_image_2018], Human Connectome Project in Development [HCPD @harms_extending_2018], Human Connectome Project in Aging [HCPA @harms_extending_2018], the Adolescent Brain Cognitive Development [ABCD @casey_adolescent_2018] study, and the Spatial Topology (SpaceTop) project [@jung_spacetop_2025]. Together, these datasets comprise more than 50,000 unique participants and more than 300,000 scans. We further benchmark our findings against motion distributions reported by MRIQC [@esteban_mriqc_2017], which, as of writing, aggregates data from over 1.5 million scans. By quantifying motion across large-scale cohorts, we assess both its magnitude and its demographic consequences under commonly applied exclusion thresholds. We address four questions ([@tbl-overview]): (A) How much do participants move across major datasets? (B) In these datasets, which participant characteristics are related to motion? (C) Which demographic groups are disproportionately excluded? and (D) What are the implications for sample composition and downstream inference? We find that exclusion is both substantial and demographically patterned, with negative implications for the generalizability of population neuroimaging findings.
 
@@ -252,7 +252,7 @@ With modern scanning parameters, several reports suggest that motion measures ar
 
 In the following, each scan consists of $T$ time points (brain volumes/frames), each with $V$ voxels. Let $x_{vt}$ denote the fMRI signal at voxel $v$ and time $t$, $m_v$ the temporal mean at voxel $v$, and $m$ the grand mean across all voxels and time points. To begin, we center and scale the data as follows:
 
-$$y_{vt} = \frac{x_{vt} - m_v}{m} \times 100.$$
+$$y_{vt} = \frac{x_{vt} - m_v}{m} \times 100$$
 
 The total (all) variation at time $t$ is defined as A-var:
 
@@ -260,13 +260,13 @@ $$A(t) = \frac{1}{V}  \sum_{v=1}^V y_{vt}^2 $$
 
 and the variance of the first difference as D-var:
 
-$$D(t) = \frac{1}{V}  \sum_{v=1}^V \left( \frac{y_{vt} - y_{vt-1}}{2} \right)^2.$$
+$$D(t) = \frac{1}{V}  \sum_{v=1}^V \left( \frac{y_{vt} - y_{vt-1}}{2} \right)^2$$
 
 DVARS is defined as: $$DVARS(t) = 2 \sqrt{D(t)}$$
 
 It is often of interest to determine whether this value is significantly different from some value $\mu_0$. Assuming normality, the corresponding $\chi^2$-statistic is of the form:
 
-$$X(DVARS(t)) = \frac{2 {\hat \mu}_0}{{\hat \sigma}_0^2} DVARS(t)^2.$$
+$$X(DVARS(t)) = \frac{2 {\hat \mu}_0}{{\hat \sigma}_0^2} DVARS(t)^2$$
 
 Under the null $X(DVARS(t))$ follows an approximate $\chi^2_\nu$ with $\nu = 2{\hat \mu}_0/{\hat \sigma}_0^2$ degrees of freedom. Here ${\hat \mu}_0$ is the mean of $2D(t)$ under the null, and ${\hat \sigma}_0^2$ is the corresponding variance. For methods of estimating $\hat{\mu}_0$ and ${\hat \sigma}_0^2$, see @afyouni_insight_2018. The values of $X(DVARS(t))$ can be converted to $p$-values, denoted $P(DVARS(t))$, and then to $z$-scores:
 
@@ -728,13 +728,23 @@ Code to reproduce analyses is available on GitHub: [psadil/motion_fmri_survey](h
 
 # Funding {.unnumbered}
 
+This work was supported by R01 EB026549 from the National Institute of Biomedical Imaging and Bioengineering and R01 MH129397 from the National Institute of Mental Health.
+
 # Declaration of Competing Interests {.unnumbered}
 
 The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
 
 # Acknowledgements {.unnumbered}
 
-Data were provided by the Human Connectome Project, WU-Minn Consortium (Principal Investigators: David Van Essen and Kamil Ugurbil; 1U54MH091657), funded by the 16 NIH Institutes and Centers that support the NIH Blueprint for Neuroscience Research, and by the McDonnell Center for Systems Neuroscience at Washington University. This research has been conducted using data from UK Biobank, a major biomedical database (Project ID: 33278). We are grateful to UK Biobank and the UK Biobank participants for making the resource data possible, and to the data processing team at Oxford University for sharing the processed data. The UK Biobank imaging project is funded by the Medical Research Council and the Wellcome Trust.
+Data were provided by the Human Connectome Project, WU-Minn Consortium (Principal Investigators: David Van Essen and Kamil Ugurbil; 1U54MH091657), funded by the 16 NIH Institutes and Centers that support the NIH Blueprint for Neuroscience Research, and by the McDonnell Center for Systems Neuroscience at Washington University. 
+
+Research reported in this publication was supported by the National Institute On Aging of the National Institutes of Health under Award Number U01AG052564. The content is solely the responsibility of the authors and does not necessarily represent the official views of the National Institutes of Health.
+
+Research reported in this publication was supported by the National Institute Of Mental Health of the National Institutes of Health under Award Number U01MH109589. The content is solely the responsibility of the authors and does not necessarily represent the official views of the National Institutes of Health.
+
+This research has been conducted using data from UK Biobank, a major biomedical database (Project ID: 33278). We are grateful to UK Biobank and the UK Biobank participants for making the resource data possible, and to the data processing team at Oxford University for sharing the processed data. The UK Biobank imaging project is funded by the Medical Research Council and the Wellcome Trust.
+
+Data used in the preparation of this article were obtained from the Adolescent Brain Cognitive DevelopmentSM (ABCD) Study (https://abcdstudy.org), held in the NIMH Data Archive (NDA). This is a multisite, longitudinal study designed to recruit more than 10,000 children age 9-10 and follow them over 10 years into early adulthood. The ABCD Study® is supported by the National Institutes of Health and additional federal partners under award numbers U01DA041048, U01DA050989, U01DA051016, U01DA041022, U01DA051018, U01DA051037, U01DA050987, U01DA041174, U01DA041106, U01DA041117, U01DA041028, U01DA041134, U01DA050988, U01DA051039, U01DA041156, U01DA041025, U01DA041120, U01DA051038, U01DA041148, U01DA041093, U01DA041089, U24DA041123, U24DA041147. A full list of supporters is available at https://abcdstudy.org/federal-partners.html. A listing of participating sites and a complete listing of the study investigators can be found at https://abcdstudy.org/consortium_members/. ABCD consortium investigators designed and implemented the study and/or provided data but did not necessarily participate in the analysis or writing of this report. This manuscript reflects the views of the authors and may not reflect the opinions or views of the NIH or ABCD consortium investigators.
 
 # References {.unnumbered}
 
@@ -743,6 +753,22 @@ Data were provided by the Human Connectome Project, WU-Minn Consortium (Principa
 
 \newpage
 \appendix
+
+<!-- \appendix is what gives supplementary floats their "Figure A1"/"Table A1"
+numbering, so it must stay. Two adjustments to how apa7 renders it:
+
+1. apa7 prints \appendixname ("Appendix") on its own line above every appendix
+   section title, which duplicates the heading below. Blanking the name leaves
+   just the section title.
+2. apa7 resets float counters in appendices but not section counters, so
+   subsections here would continue the main-text numbering (4.4, 4.5, ...).
+   Binding subsection to the appendix counter restarts them and prefixes the
+   appendix letter, giving A.1, A.2, ... to match "Figure A1"/"Table A1". -->
+
+```{=latex}
+\renewcommand{\appendixname}{}
+\counterwithin{subsection}{appendix}
+```
 
 # Supplementary Materials {#sec-supplements}
 

@@ -10,6 +10,8 @@ project:
 metadata-files:
   - _authors.yml
 
+lang: en
+
 
 format:
   # pdf:
@@ -37,13 +39,15 @@ format:
     #   cite-style: authoryear
     # keep-tex: true
     # latex-max-runs: 20
-  apaquarto-pdf: 
+  apaquarto-pdf:
     # Can be jou (journal), man (manuscript), stu (student), or doc (document)
     documentmode: man
-    keep-tex: true
-    pdf-standard: ua-2
     include-in-header:
     - text: |
+        % apaquarto emits no \hypersetup block, so PDF catalog entries that
+        % viewers and screen readers use must be set explicitly here.
+        % hyperref is already loaded by this point.
+        \hypersetup{pdflang={en},pdfdisplaydoctitle=true}
         \usepackage[section]{placeins}
         \usepackage{tikz}
         \usepackage{pdflscape}
