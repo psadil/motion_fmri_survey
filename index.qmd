@@ -1,5 +1,5 @@
 ---
-title: "The State of Motion: Demographic and representational consequences of motion-based exclusion in fMRI"
+title: "The State of Motion: Demographic and Representational Consequences of Motion-Based Exclusion in FMRI"
 shorttitle: The State of Motion
 keywords:
   - MRI
@@ -333,7 +333,7 @@ Average Motion by Time in the HCPA Dataset. Data plotted as in @fig-all-by-time-
 targets::tar_read(fig_by_time_hcpd)
 ```
 
-Average Motion by Time in the HCPD Dataset. Data plotted as in @fig-all-by-time-hcpa.
+Average Motion by Time in the HCPD Dataset. Data plotted as in @fig-all-by-time-hcpya.
 :::
 
 ::: {#fig-all-by-time-ukb}
@@ -343,7 +343,7 @@ Average Motion by Time in the HCPD Dataset. Data plotted as in @fig-all-by-time-
 targets::tar_read(fig_by_time_ukb)
 ```
 
-Average Motion by Time in the UKB Dataset. Data plotted as in @fig-all-by-time-hcpa.
+Average Motion by Time in the UKB Dataset. Data plotted as in @fig-all-by-time-hcpya.
 :::
 
 ::: {#fig-all-by-time-abcd}
@@ -353,7 +353,7 @@ Average Motion by Time in the UKB Dataset. Data plotted as in @fig-all-by-time-h
 targets::tar_read(fig_by_time_abcd)
 ```
 
-Average Motion by Time in the ABCD Dataset. Data plotted as in @fig-all-by-time-hcpa.
+Average Motion by Time in the ABCD Dataset. Data plotted as in @fig-all-by-time-hcpya.
 :::
 
 ::: {#fig-all-by-time-spacetop}
@@ -363,7 +363,7 @@ Average Motion by Time in the ABCD Dataset. Data plotted as in @fig-all-by-time-
 targets::tar_read(fig_by_time_spacetop)
 ```
 
-Average Motion by Time in the SpaceTop Dataset. Data plotted as in @fig-all-by-time-hcpa.
+Average Motion by Time in the SpaceTop Dataset. Data plotted as in @fig-all-by-time-hcpya.
 :::
 
 In general, motion tended to increase throughout a session, such that later runs showed more motion than earlier ones (@fig-all-by-time-hcpya through @fig-all-by-time-spacetop). For example, in all three ABCD sessions, average motion increased progressively across resting-state runs. Likewise, in the first session of SpaceTop, each subsequent social run exhibited higher average motion than the previous one. This progressive increase suggests fatigue, reduced compliance, or discomfort as plausible contributors to within-session motion drift. However, this pattern did not hold for the resting-state scans in the HCPD and HCPA datasets, where the second resting-state run often had somewhat less motion than the first, suggesting that session structure and scheduling may modulate temporal patterns of movement.
@@ -505,7 +505,7 @@ Relationships Between Average Motion and Psychological and Life Function Variabl
 targets::tar_read(fig_all_motion_exclusion)
 ```
 
-Rates of Participant Exclusion by Framewise Displacement. Proportions were calculated within each scan type (e.g., each combination of session, run, and task). Lenient and Strict refer to exclusion regimes (see Methods). The variable "scan" refers to the order in which scans were collected (including scans collected on separate days). See also @fig-lost-filtered.
+Rates of Participant Exclusion by Framewise Displacement. Proportions were calculated within each scan type (e.g., each combination of session, run, and task). Lenient and Strict refer to exclusion regimes (see Methods). The variable "scan" (color) refers to the order in which scans were collected (including scans collected on separate days). See also @fig-lost-filtered.
 :::
 
 ::: {#fig-lost-filtered}
@@ -722,9 +722,19 @@ Motion in fMRI is often treated as a technical nuisance---noise to be modeled, f
 
 # Data and Code Availability {.unnumbered}
 
-Code to reproduce analyses is available on GitHub: [psadil/motion_fmri_survey](https://github.com/psadil/motion_fmri_survey). Analyses relied on open data from the Human Connectome Project, available for download from the HCP website humanconnectome.org, and from the UK Biobank.
+Analyses relied on open data from the Human Connectome Project, available for download from the HCP website humanconnectome.org. 
+
+The data that support the findings of this study are available from UK Biobank. Restrictions apply to the availability of these data, which were used under license for this study. Data are available from https://www.ukbiobank.ac.uk/enable-your-research/apply-for-access with the permission of UK Biobank.
+
+The de-identified ABCD data and data dictionaries are available through the NIMH Data Archive (NDA) following approval of a Data Use Certification (DUC). Data releases are hosted on the NIH Brain Development Cohorts.
+
+The SpaceTop motion data is available on [OpenNeuro as ds007070](https://doi.org/10.18112/openneuro.ds007070.v1.0.3).
+
+Code to reproduce analyses is available on GitHub: [psadil/motion_fmri_survey](https://github.com/psadil/motion_fmri_survey). 
 
 # Author Contributions {.unnumbered}
+
+**Conceptualization**: PS, BA, ACM, ASC, JC, FVF, LEI, MAJ, AK, MBN, JJP, HIS, JS, AMS, MAL; **Data Curation**: PS, BA, ACM, LEI, AK, JS; **Formal Analysis**: PS, BA, ACM, JC, LEI, AK, JS; **Funding Acquisition**: MAL; **Project Administration**: PS, MAL; **Resources**: PS; **Software**: PS, BA, ACM, LEI, AK, JS; **Supervision**: MAL; **Visualization**: PS, BA, ACM, LEI, AK, MBN, JS, TDW, MAL; **Writing -- Original Draft**: PS, BA, LEI, JS; **Writing -- Review & Editing**: PS, ACM, ASC, MBN, JJP, JS, TDW, MAL.
 
 # Funding {.unnumbered}
 
@@ -786,7 +796,7 @@ Comparison of Motion in Resting-State Scans Across ABCC and ABCD. Each point cor
 
 ## Motion Spectral Frequencies {#sec-fixed-frequency-plots}
 
-In all plots below, only the first run of a task is included per session. Spectra are calculated as in @fair_correction_2020. Briefly, power spectral densities, $p$, were estimated after detrending with an adaptive, multitaper filter (NFFT=512, NW=8), scaled by $10\log(p)$, z-scored, linearized, converted to percentages, and truncated at \SI{0.1}{\percent} and \SI{96}{\percent}. For a detailed description of the procedure see @fair_correction_2020.
+In all plots below, only the first run of a task is included per session. Spectra are calculated as in @fair_correction_2020. Briefly, power spectral densities, $p$, were estimated after detrending with an adaptive, multitaper filter (NFFT=512, NW=8), scaled by $10\log(p)$, z-scored, linearized, converted to percentages, and truncated at \SI{0.1}{\percent} and \SI{96}{\percent}. For a detailed description of the procedure see @fair_correction_2020. Within each panel, rows correspond to participants ordered by average framewise displacement. Because a panel is far too short to resolve individual participants, spectra from datasets with more than 256 participants were averaged within 256 equally sized bins of that ordering; this discards only vertical resolution that could not have been displayed at print resolution. SpaceTop has fewer than 256 participants and so is shown unbinned, with one row per participant.
 
 ::: {#fig-hcpa-spectrum}
 ```{r hcpa-spectrum}

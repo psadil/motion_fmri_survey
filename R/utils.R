@@ -549,18 +549,53 @@ get_orig_counts <- function(
     dplyr::count(dataset)
 }
 
-plot_spectrum <- function(spectrums) {
-  ds <- unique(spectrums$dataset)
-  d <- spectrums |>
-    dplyr::mutate(avg = factor(avg, ordered = TRUE)) |>
-    dplyr::select(-ses, -scan, -dataset, -sub)
+# Each raster row is a participant, ordered by average framewise displacement.
+# One row per participant encodes far more vertical resolution than can ever be
+# drawn, and the resulting embedded images dominated the size of the rendered
+# PDF (one ABCD panel set alone was 72 MB). Averaging participants into
+# `n_bins` rows along the same ordering discards only resolution that was
+# never displayable.
+#
+# Choosing n_bins: the tightest panels are HCPYA (8 task rows in 7 in) and ABCD
+# (4 task rows in a 3.5 in half of a stacked pair), both roughly 0.6 in tall.
+# That resolves ~180 rows at 300 dpi and ~360 at 600 dpi, so 256 is fully
+# resolved even at 600 dpi while still being oversampled for a 300 dpi print.
+# Raising it buys detail no printer or screen will show; lowering it below ~180
+# would start to be visible in a 300 dpi figure.
+#
+# Datasets with fewer than `n_bins` participants are left untouched (SpaceTop,
+# at 117 participants, is the only one).
+plot_spectrum <- function(spectrums, n_bins = 256) {
+  d <- spectrums |> dplyr::select(-ses, -scan, -dataset, -sub)
+
+  binned <- dplyr::n_distinct(d$avg) > n_bins
+  if (binned) {
+    d <- d |>
+      dplyr::mutate(
+        avg = as.integer(cut(
+          dplyr::dense_rank(avg),
+          breaks = n_bins,
+          labels = FALSE
+        )),
+        .by = c(task)
+      ) |>
+      dplyr::summarise(pxx = mean(pxx), .by = c(param, task, freq, avg))
+  } else {
+    d <- dplyr::mutate(d, avg = dplyr::dense_rank(avg))
+  }
+
+  ylabel <- paste0(
+    if (binned) "binned participants" else "participant",
+    "\n(<- lower avg fd, higher avg fd ->)"
+  )
 
   d |>
+    dplyr::mutate(avg = factor(avg)) |>
     ggplot2::ggplot(ggplot2::aes(y = avg, x = freq)) +
     ggplot2::facet_grid(task ~ param, scales = "free_y") +
     ggplot2::geom_raster(ggplot2::aes(fill = pxx)) +
     ggplot2::scale_fill_viridis_c(option = "turbo") +
-    ggplot2::ylab("participant\n(<- lower avg fd, higher avg fd ->)") +
+    ggplot2::ylab(ylabel) +
     ggplot2::theme(
       axis.ticks.y = ggplot2::element_blank(),
       axis.text.y = ggplot2::element_blank()
