@@ -119,6 +119,8 @@ We extracted sociodemographic, clinical, and fMRI data from six publicly availab
 
 From each dataset, participants were excluded from the analyses if key demographic variables were unavailable. For demographics, we focused on three that were generally available: age, sex, and body mass index (BMI). When a variable was unavailable across the entire dataset, we note this explicitly below. Additional dataset-specific exclusion criteria are listed below. Note that these exclusions differ from the motion-based exclusions that are the primary subject of this survey.
 
+Informed consent was obtained from all participants for being included in each dataset analyzed here.
+
 ### The HCP Young Adult (HCPYA) 1200 Subjects Data Release
 
 The HCPYA comprises `r dplyr::filter(orig_counts, dataset=="hcpya") |> purrr::pluck("n")` participants aged 22--37 years. Whole-brain EPI data were acquired on a Siemens Skyra \SI{3}{\tesla} scanner at Washington University in St. Louis with TR=\SI{720}{\milli\second}, TE=\SI{33.1}{\milli\second}, flip angle=\SI{52}{\degree}, \SI{2}{\milli\meter} isotropic voxels, 72 slices, and a multi-band acceleration factor of 8. For each task, two runs were acquired with opposite phase-encoding directions (LR and RL). Full acquisition details are provided in [@setsompop_blipped_2012; @moeller_multiband_2010; @feinberg_multiplexed_2010; @xu_highly_2012].
