@@ -214,8 +214,10 @@ freq_limits |>
       dataset == "spacetop",
       "SpaceTop",
       stringr::str_to_upper(dataset)
-    )
+    ),
+    ses = factor(ses, ordered = TRUE)
   ) |>
+  dplyr::arrange(dataset, ses) |>
   dplyr::rename(Lower = lower, Upper = upper) |>
   gt::gt(rowname_col = c("dataset", "ses")) |>
   gt::tab_stubhead(c("Dataset", "Session/Cohort")) |>
